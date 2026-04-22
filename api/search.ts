@@ -3,17 +3,6 @@ export const config = { runtime: 'edge' };
 const SERPER_KEY = process.env.SERPER_API_KEY!;
 const GEMINI_KEY = process.env.GEMINI_API_KEY!;
 
-const PORTAL_SITES = [
-  'inmuebles24.com',
-  'vivanuncios.com',
-  'metroscubicos.com',
-  'propiedades.com',
-  'realtyworld.com.mx',
-  'iadmexico.mx',
-  'inmuebles.nocnok.com',
-  'inmuebles.mercadolibre.com.mx',
-];
-
 interface SearchParams {
   tipo?: string;
   tipoPropiedad?: string;
@@ -25,25 +14,37 @@ interface SearchParams {
   query?: string;
 }
 
-function buildQuery(params: SearchParams): string {
-  const parts: string[] = [];
-  if (params.tipo) parts.push(params.tipo === 'renta' ? 'renta' : 'venta');
-  if (params.tipoPropiedad) parts.push(params.tipoPropiedad);
-  if (params.zona) parts.push(params.zona);
-  if (params.recamaras) parts.push(`${params.recamaras} recámaras`);
-  if (params.banos) parts.push(`${params.banos} baños`);
-  if (params.precioMin && params.precioMax) {
-    parts.push(`$${params.precioMin} a $${params.precioMax}`);
-  } else if (params.precioMax) {
-    parts.push(`hasta $${params.precioMax}`);
-  } else if (params.precioMin) {
-    parts.push(`desde $${params.precioMin}`);
-  }
-  if (params.query) parts.push(params.query);
-  if (parts.length === 0) parts.push('propiedad inmueble');
+// ── Build targeted queries for each portal group ───────────────────────
+function buildQueries(params: SearchParams): string[] {
+  const base: string[] = [];
+  if (params.tipo) base.push(params.tipo === 'renta' ? 'renta' : 'venta');
+  if (params.tipoPropiedad) base.push(params.tipoPropiedad);
+  if (params.zona) base.push(params.zona);
+  if (params.recamaras) base.push(`${params.recamaras} recámaras`);
+  if (params.banos) base.push(`${params.banos} baños`);
+  if (params.query) base.push(params.query);
 
-  const siteFilter = PORTAL_SITES.map(s => `site:${s}`).join(' OR ');
-  return `${parts.join(' ')} (${siteFilter})`;
+  // Build price hint that Google understands
+  let priceHint = '';
+  if (params.precioMin && params.precioMax) {
+    priceHint = `"$${Number(params.precioMin).toLocaleString('es-MX')}" OR "$${Number(params.precioMax).toLocaleString('es-MX')}"`;
+  } else if (params.precioMax) {
+    priceHint = `"$${Number(params.precioMax).toLocaleString('es-MX')}"`;
+  } else if (params.precioMin) {
+    priceHint = `"$${Number(params.precioMin).toLocaleString('es-MX')}"`;
+  }
+
+  if (priceHint) base.push(priceHint);
+  if (base.length === 0) base.push('propiedad inmueble');
+
+  const baseStr = base.join(' ');
+
+  // Three parallel queries covering all major portals
+  return [
+    `${baseStr} (site:inmuebles24.com OR site:vivanuncios.com)`,
+    `${baseStr} (site:metroscubicos.com OR site:propiedades.com OR site:inmuebles.mercadolibre.com.mx)`,
+    `${baseStr} (site:realtyworld.com.mx OR site:iadmexico.mx OR site:inmuebles.nocnok.com)`,
+  ];
 }
 
 function detectPortal(url: string): string {
@@ -59,7 +60,7 @@ function detectPortal(url: string): string {
   try { return new URL(url).hostname.replace('www.', ''); } catch { return 'Otro'; }
 }
 
-// ── Regex fallback (instant, always works) ─────────────────────────────
+// ── Regex fallback parser ──────────────────────────────────────────────
 function parseWithRegex(title: string, snippet: string) {
   const text = `${title} ${snippet}`;
 
@@ -83,42 +84,56 @@ function parseWithRegex(title: string, snippet: string) {
   const phoneMatch = text.match(/(?:\+?52\s?)?(?:\d{2,3}[\s-]){2,3}\d{4}/);
   const contacto = phoneMatch ? phoneMatch[0].trim() : null;
 
-  const descripcion = snippet.replace(/\s+/g, ' ').trim().substring(0, 120);
-  const titulo = title.replace(/\s*[-|·]\s*.+$/, '').trim() || title;
-
-  return { titulo, precio, recamaras, banos, m2, ubicacion, contacto, descripcion };
+  return {
+    titulo: title.replace(/\s*[-|·]\s*.+$/, '').trim() || title,
+    precio,
+    recamaras,
+    banos,
+    m2,
+    ubicacion,
+    contacto,
+    descripcion: snippet.replace(/\s+/g, ' ').trim().substring(0, 120),
+  };
 }
 
-// ── Gemini Flash structured extraction (1-2s) ──────────────────────────
-async function structureWithGemini(
-  results: { title: string; snippet: string; link: string; portal: string }[]
-) {
+// ── Gemini Flash extraction + price filtering ──────────────────────────
+async function extractWithGemini(
+  results: { title: string; snippet: string; link: string; portal: string }[],
+  params: SearchParams
+): Promise<any[] | null> {
   const listingsText = results
     .map((r, i) => `[${i + 1}] Portal: ${r.portal}\nTítulo: ${r.title}\nSnippet: ${r.snippet}`)
     .join('\n\n');
 
-  const prompt = `Eres un extractor de datos inmobiliarios de México. Dado los siguientes títulos y snippets de Google, extrae la información de cada propiedad.
+  const priceContext = params.precioMin || params.precioMax
+    ? `El usuario busca propiedades${params.precioMin ? ` desde $${Number(params.precioMin).toLocaleString('es-MX')}` : ''}${params.precioMax ? ` hasta $${Number(params.precioMax).toLocaleString('es-MX')}` : ''}. Si el precio de una propiedad en el snippet claramente está fuera de este rango, pon "precio_fuera_de_rango": true.`
+    : '';
 
-Para cada propiedad devuelve un objeto con:
-- titulo: string (limpio, sin nombre del portal)
+  const prompt = `Eres un extractor de datos inmobiliarios de México. Extrae la información de cada propiedad.
+
+${priceContext}
+
+Para cada propiedad devuelve:
+- titulo: string (limpio, sin nombre del portal al final)
 - precio: string o null (ej: "$15,000/mes" o "$2,500,000")
-- ubicacion: string o null (colonia, ciudad o zona)
-- recamaras: string o null (solo el número)
-- banos: string o null (solo el número)
+- ubicacion: string o null (colonia, ciudad o zona geográfica)
+- recamaras: string o null (solo número)
+- banos: string o null (solo número)
 - m2: string o null (con unidad, ej: "120 m²")
 - contacto: string o null (teléfono si aparece)
-- descripcion: string (máx 100 chars con las características más relevantes)
+- descripcion: string (máx 100 chars con características clave)
+- precio_fuera_de_rango: boolean (true si el precio claramente no cumple el rango buscado)
 
 REGLAS:
-- Extrae solo lo que esté explícito en el texto.
+- Extrae solo lo que esté explícito en el snippet.
 - Si no encuentras un dato, pon null.
-- Responde ÚNICAMENTE con un JSON array válido. Sin markdown, sin explicaciones.
+- Responde ÚNICAMENTE con un JSON array válido. Sin markdown, sin texto extra.
 
-Propiedades:
+Propiedades a extraer:
 ${listingsText}`;
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s hard cap
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
 
   try {
     const res = await fetch(
@@ -129,11 +144,10 @@ ${listingsText}`;
         signal: controller.signal,
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0, maxOutputTokens: 1500 },
+          generationConfig: { temperature: 0, maxOutputTokens: 2000 },
         }),
       }
     );
-
     clearTimeout(timeoutId);
     if (!res.ok) return null;
 
@@ -143,7 +157,23 @@ ${listingsText}`;
     return JSON.parse(cleaned);
   } catch {
     clearTimeout(timeoutId);
-    return null; // Graceful fallback to regex
+    return null;
+  }
+}
+
+// ── Serper single query ────────────────────────────────────────────────
+async function searchSerper(query: string): Promise<any[]> {
+  try {
+    const res = await fetch('https://google.serper.dev/search', {
+      method: 'POST',
+      headers: { 'X-API-KEY': SERPER_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ q: query, gl: 'mx', hl: 'es', num: 10 }),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.organic || [];
+  } catch {
+    return [];
   }
 }
 
@@ -156,57 +186,53 @@ export default async function handler(request: Request) {
     'Access-Control-Allow-Headers': 'Content-Type',
   };
 
-  if (request.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers });
-  }
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
   if (request.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405, headers });
   }
 
   try {
     const params: SearchParams = await request.json();
-    const query = buildQuery(params);
+    const queries = buildQueries(params);
 
-    // 1) Serper (~1-2s)
-    const serperRes = await fetch('https://google.serper.dev/search', {
-      method: 'POST',
-      headers: { 'X-API-KEY': SERPER_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ q: query, gl: 'mx', hl: 'es', num: 20 }),
+    // 1) Run 3 Serper queries in parallel (~2s total)
+    const [r1, r2, r3] = await Promise.all(queries.map(q => searchSerper(q)));
+
+    // Deduplicate by URL
+    const seen = new Set<string>();
+    const allOrganic = [...r1, ...r2, ...r3].filter((r: any) => {
+      if (seen.has(r.link)) return false;
+      seen.add(r.link);
+      return true;
     });
 
-    if (!serperRes.ok) {
-      const errBody = await serperRes.text().catch(() => '');
-      throw new Error(`Serper error ${serperRes.status}: ${errBody.substring(0, 200)}`);
+    if (allOrganic.length === 0) {
+      return new Response(JSON.stringify({ properties: [], query: queries[0], total: 0 }), { headers });
     }
 
-    const serperData = await serperRes.json();
-    const organic: any[] = serperData.organic || [];
-
-    if (organic.length === 0) {
-      return new Response(JSON.stringify({ properties: [], query, total: 0 }), { headers });
-    }
-
-    const topResults = organic.slice(0, 8).map((r: any) => ({
+    const topResults = allOrganic.slice(0, 12).map((r: any) => ({
       title: r.title || '',
       snippet: r.snippet || '',
       link: r.link,
       portal: detectPortal(r.link),
     }));
 
-    // 2) Gemini Flash (~1-2s) with regex fallback
-    const geminiData = await structureWithGemini(topResults);
+    // 2) Gemini extraction + filtering (~1-2s) with regex fallback
+    const geminiData = await extractWithGemini(topResults, params);
 
     let properties: any[];
 
     if (geminiData && Array.isArray(geminiData) && geminiData.length > 0) {
-      // Merge Gemini structured data with Serper URLs
-      properties = geminiData.map((item: any, i: number) => ({
-        ...item,
-        url: topResults[i]?.link || '',
-        portal: topResults[i]?.portal || 'Otro',
-      }));
+      properties = geminiData
+        .map((item: any, i: number) => ({
+          ...item,
+          url: topResults[i]?.link || '',
+          portal: topResults[i]?.portal || 'Otro',
+        }))
+        // Remove results Gemini flagged as outside price range
+        .filter((item: any) => !item.precio_fuera_de_rango);
     } else {
-      // Fallback: regex parsing (instant)
+      // Fallback: regex (instant)
       properties = topResults.map(r => ({
         ...parseWithRegex(r.title, r.snippet),
         url: r.link,
@@ -214,14 +240,14 @@ export default async function handler(request: Request) {
       }));
     }
 
-    // Append remaining results with regex (instant)
-    organic.slice(8).forEach((r: any) => {
+    // Append any remaining with regex
+    allOrganic.slice(12).forEach((r: any) => {
       const parsed = parseWithRegex(r.title || '', r.snippet || '');
       properties.push({ ...parsed, url: r.link, portal: detectPortal(r.link) });
     });
 
     return new Response(
-      JSON.stringify({ properties, query, total: properties.length }),
+      JSON.stringify({ properties, query: queries[0], total: properties.length }),
       { headers }
     );
   } catch (error: any) {
