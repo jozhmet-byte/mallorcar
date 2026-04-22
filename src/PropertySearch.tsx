@@ -540,12 +540,4 @@ function PropertyCard({ property: p, index }: { property: Property; index: numbe
       </div>
     </motion.div>
   );
-}g-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 flex items-center gap-1.5"
-          >
-            <MessageCircle size={12} /> WhatsApp
-          </a>
-        )}
-      </div>
-    </motion.div>
-  );
 }
