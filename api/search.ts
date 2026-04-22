@@ -1,8 +1,5 @@
-export const config = { 
-  runtime: 'edge'
-};
+export const config = { runtime: 'edge' };
 
-const DEEPSEEK_KEY = process.env.DEEPSEEK_API_KEY!;
 const SERPER_KEY = process.env.SERPER_API_KEY!;
 
 const PORTAL_SITES = [
@@ -61,92 +58,44 @@ function detectPortal(url: string): string {
   try { return new URL(url).hostname.replace('www.', ''); } catch { return 'Otro'; }
 }
 
-// ── Step 1: Search via Serper ──────────────────────────────────────────
-async function searchSerper(query: string) {
-  const res = await fetch('https://google.serper.dev/search', {
-    method: 'POST',
-    headers: {
-      'X-API-KEY': SERPER_KEY,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ q: query, gl: 'mx', hl: 'es', num: 20 }),
-  });
-  if (!res.ok) {
-    const errBody = await res.text().catch(() => '');
-    throw new Error(`Serper ${res.status}: ${errBody.substring(0, 200)}`);
-  }
-  return res.json();
-}
+// ── Parse snippet with regex instead of LLM ────────────────────────────
+function parseSnippet(title: string, snippet: string) {
+  const text = `${title} ${snippet}`;
 
-// ── Step 2: DeepSeek structures snippets ─────────────────────────────────────
-async function structureWithDeepSeek(
-  results: { title: string; snippet: string; link: string; portal: string }[]
-) {
-  const listingsText = results
-    .map(
-      (r, i) =>
-        `[${i + 1}] Portal: ${r.portal}\nTítulo: ${r.title}\nSnippet: ${r.snippet}\nURL: ${r.link}`
-    )
-    .join('\n\n');
+  // Price: $15,000 / $1,500,000 / $15 mil / $1.5 mdp
+  const priceMatch =
+    text.match(/\$\s?[\d,]+(?:\.\d+)?\s?(?:\/mes|al mes|mensual|MXN)?/i) ||
+    text.match(/[\d,]+(?:\.\d+)?\s?(?:mil|mdp|millones?)\s?pesos?/i);
+  const precio = priceMatch ? priceMatch[0].trim() : null;
 
-  // Vercel Hobby limits functions to 10 seconds.
-  // We apply a strict 6.5s timeout to DeepSeek so the function never 504s.
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 6500);
+  // Bedrooms
+  const recMatch = text.match(/(\d+)\s*(?:rec[aá]maras?|habitaciones?|cuartos?|rooms?|beds?|recám)/i);
+  const recamaras = recMatch ? recMatch[1] : null;
 
-  try {
-    const res = await fetch('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${DEEPSEEK_KEY}`,
-      },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: [
-          {
-            role: 'system',
-            content: `Eres un extractor de datos inmobiliarios. Dado los títulos y snippets de Google de publicaciones de propiedades en México, extrae la información en JSON.
+  // Bathrooms
+  const banMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:ba[ñn]os?|bath)/i);
+  const banos = banMatch ? banMatch[1] : null;
 
-Para cada propiedad extrae:
-- titulo: string (limpio y conciso)
-- precio: string o null (incluir "$", ej "$15,000/mes")
-- ubicacion: string o null
-- recamaras: string o null (solo número)
-- banos: string o null (solo número)
-- m2: string o null
-- descripcion: string (máx 80 chars con las características principales)
+  // Square meters
+  const m2Match = text.match(/(\d[\d,.]*)\s*(?:m²|m2|metros?\s*cuadrados?)/i);
+  const m2 = m2Match ? `${m2Match[1]} m²` : null;
 
-REGLAS:
-- Extrae SOLO lo que aparezca explícitamente.
-- Si no encuentras un dato, pon null.
-- Responde ÚNICAMENTE con un JSON array válido, sin markdown ni texto adicional.`,
-          },
-          {
-            role: 'user',
-            content: `Extrae datos de estas ${results.length} propiedades:\n\n${listingsText}`,
-          },
-        ],
-        max_tokens: 1000,
-        temperature: 0,
-      }),
-    });
+  // Location: look for "en [location]" or "Col.", "Fracc.", city names
+  const locMatch =
+    snippet.match(/(?:en|col\.?|fracc\.?|colonia|fraccionamiento)\s+([A-ZÁÉÍÓÚÑ][^\.,\n]{3,40})/i);
+  const ubicacion = locMatch ? locMatch[0].trim() : null;
 
-    clearTimeout(timeoutId);
+  // Phone number
+  const phoneMatch = text.match(/(?:\+?52\s?)?(?:\d{2,3}[\s-]){2,3}\d{4}/);
+  const contacto = phoneMatch ? phoneMatch[0].trim() : null;
 
-    if (!res.ok) return null;
-    const data = await res.json();
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) return null;
+  // Clean description
+  const descripcion = snippet.replace(/\s+/g, ' ').trim().substring(0, 120);
 
-    const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    return JSON.parse(cleaned);
-  } catch (error) {
-    clearTimeout(timeoutId);
-    console.error('DeepSeek timeout or error:', error);
-    return null; // Gracefully fallback to raw snippets if it timeouts
-  }
+  // Clean title
+  const titulo = title.replace(/\s*[-|·]\s*.+$/, '').trim() || title;
+
+  return { titulo, precio, recamaras, banos, m2, ubicacion, contacto, descripcion };
 }
 
 // ── Handler ────────────────────────────────────────────────────────────
@@ -169,63 +118,36 @@ export default async function handler(request: Request) {
     const params: SearchParams = await request.json();
     const query = buildQuery(params);
 
-    // 1) Serper search (~1-2s)
-    const serperData = await searchSerper(query);
+    // ── Serper search (~1-2s, no other dependencies) ──────────────────
+    const serperRes = await fetch('https://google.serper.dev/search', {
+      method: 'POST',
+      headers: {
+        'X-API-KEY': SERPER_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ q: query, gl: 'mx', hl: 'es', num: 20 }),
+    });
+
+    if (!serperRes.ok) {
+      const errBody = await serperRes.text().catch(() => '');
+      throw new Error(`Serper error ${serperRes.status}: ${errBody.substring(0, 200)}`);
+    }
+
+    const serperData = await serperRes.json();
     const organic: any[] = serperData.organic || [];
 
     if (organic.length === 0) {
       return new Response(JSON.stringify({ properties: [], query, total: 0 }), { headers });
     }
 
-    // 2) Prepare data for DeepSeek (Limit to top 6 to make DeepSeek process much faster)
-    const topResults = organic.slice(0, 6).map((r: any) => ({
-      title: r.title || '',
-      snippet: r.snippet || '',
-      link: r.link,
-      portal: detectPortal(r.link),
-    }));
-
-    // 3) DeepSeek structures the snippets (timeout limits it to max 6.5s)
-    const structured = await structureWithDeepSeek(topResults);
-
-    let properties: any[];
-
-    if (structured && Array.isArray(structured) && structured.length > 0) {
-      properties = structured.map((item: any, i: number) => ({
-        ...item,
-        url: topResults[i]?.link || '',
-        portal: topResults[i]?.portal || 'Otro',
-      }));
-    } else {
-      // Fallback: return basic results from Serper snippets if DeepSeek fails/times out
-      properties = topResults.map((r) => ({
-        titulo: r.title,
-        precio: null,
-        ubicacion: null,
-        recamaras: null,
-        banos: null,
-        m2: null,
-        contacto: null,
-        descripcion: r.snippet.substring(0, 100),
-        url: r.link,
-        portal: r.portal,
-      }));
-    }
-
-    // 4) Append remaining results as basic entries directly from Google
-    organic.slice(6).forEach((r: any) => {
-      properties.push({
-        titulo: r.title || 'Propiedad encontrada',
-        precio: null,
-        ubicacion: null,
-        recamaras: null,
-        banos: null,
-        m2: null,
-        contacto: null,
-        descripcion: (r.snippet || '').substring(0, 100),
+    // ── Parse snippets locally (instant, no AI call) ──────────────────
+    const properties = organic.map((r: any) => {
+      const parsed = parseSnippet(r.title || '', r.snippet || '');
+      return {
+        ...parsed,
         url: r.link,
         portal: detectPortal(r.link),
-      });
+      };
     });
 
     return new Response(
