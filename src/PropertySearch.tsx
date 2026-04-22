@@ -34,24 +34,30 @@ interface SearchParams {
 
 /* ─── Portal Styles ─── */
 const PORTAL_STYLES: Record<string, { bg: string; text: string; border: string }> = {
-  'Inmuebles24':    { bg: 'rgba(255,87,51,0.12)',  text: '#FF6B4A', border: 'rgba(255,87,51,0.3)' },
-  'Vivanuncios':    { bg: 'rgba(0,184,169,0.12)',   text: '#2DD4BF', border: 'rgba(0,184,169,0.3)' },
-  'Metros Cúbicos': { bg: 'rgba(45,106,79,0.12)',   text: '#52B788', border: 'rgba(45,106,79,0.3)' },
-  'Propiedades.com':{ bg: 'rgba(26,115,232,0.12)',  text: '#60A5FA', border: 'rgba(26,115,232,0.3)' },
-  'Realty World':   { bg: 'rgba(13,71,161,0.12)',   text: '#93C5FD', border: 'rgba(13,71,161,0.3)' },
-  'IAD México':     { bg: 'rgba(233,30,99,0.12)',   text: '#F472B6', border: 'rgba(233,30,99,0.3)' },
-  'NocNok':         { bg: 'rgba(103,58,183,0.12)',  text: '#C4B5FD', border: 'rgba(103,58,183,0.3)' },
-  'Mercado Libre':  { bg: 'rgba(255,230,0,0.12)',   text: '#FDE047', border: 'rgba(255,230,0,0.3)' },
-  'Facebook':       { bg: 'rgba(24,119,242,0.12)',  text: '#60A5FA', border: 'rgba(24,119,242,0.3)' },
+  'Inmuebles24':    { bg: 'rgba(255,87,51,0.1)',   text: '#ea580c', border: 'rgba(255,87,51,0.2)' },
+  'Vivanuncios':    { bg: 'rgba(0,184,169,0.1)',   text: '#0d9488', border: 'rgba(0,184,169,0.2)' },
+  'Metros Cúbicos': { bg: 'rgba(45,106,79,0.1)',   text: '#15803d', border: 'rgba(45,106,79,0.2)' },
+  'Propiedades.com':{ bg: 'rgba(26,115,232,0.1)',  text: '#2563eb', border: 'rgba(26,115,232,0.2)' },
+  'Realty World':   { bg: 'rgba(13,71,161,0.1)',   text: '#1e40af', border: 'rgba(13,71,161,0.2)' },
+  'IAD México':     { bg: 'rgba(233,30,99,0.1)',   text: '#db2777', border: 'rgba(233,30,99,0.2)' },
+  'NocNok':         { bg: 'rgba(103,58,183,0.1)',  text: '#7c3aed', border: 'rgba(103,58,183,0.2)' },
+  'Mercado Libre':  { bg: 'rgba(255,230,0,0.2)',   text: '#ca8a04', border: 'rgba(255,230,0,0.4)' },
+  'Facebook':       { bg: 'rgba(24,119,242,0.1)',  text: '#2563eb', border: 'rgba(24,119,242,0.2)' },
 };
 
-const defaultPortalStyle = { bg: 'rgba(148,163,184,0.12)', text: '#94A3B8', border: 'rgba(148,163,184,0.3)' };
+const defaultPortalStyle = { bg: 'rgba(148,163,184,0.1)', text: '#64748b', border: 'rgba(148,163,184,0.2)' };
 
 const LOADING_STEPS = [
   { icon: '🔍', label: 'Buscando en portales inmobiliarios...' },
-  { icon: '📄', label: 'Extrayendo contenido de propiedades...' },
   { icon: '🤖', label: 'Analizando y estructurando resultados...' },
 ];
+
+/* ─── Formatter ─── */
+const formatter = new Intl.NumberFormat('es-MX', {
+  style: 'currency',
+  currency: 'MXN',
+  maximumFractionDigits: 0,
+});
 
 /* ─── Component ─── */
 export default function PropertySearch() {
@@ -111,7 +117,6 @@ export default function PropertySearch() {
 
   /* ─── Search ─── */
   const handleSearch = async () => {
-    // Validate at least one field is filled
     const hasInput = params.zona || params.query || params.tipoPropiedad;
     if (!hasInput) {
       setError('Ingresa al menos una zona, tipo de propiedad o descripción.');
@@ -124,10 +129,8 @@ export default function PropertySearch() {
     setSearched(true);
     setLoadingStep(0);
 
-    // Simulate progress steps (the API handles everything in one call)
     const stepTimers = [
       setTimeout(() => setLoadingStep(1), 2000),
-      setTimeout(() => setLoadingStep(2), 6000),
     ];
 
     try {
@@ -154,73 +157,75 @@ export default function PropertySearch() {
 
   /* ─── Render ─── */
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white">
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900">
 
       {/* ─── Header ─── */}
-      <header className="sticky top-0 z-50 backdrop-blur-xl bg-slate-950/80 border-b border-white/5">
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
+      <header className="sticky top-0 z-50 backdrop-blur-xl bg-white/80 border-b border-slate-200 shadow-sm">
+        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link
             to="/"
-            className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors"
+            className="flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-indigo-600 transition-colors"
           >
-            <ArrowLeft size={16} />
+            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center hover:bg-indigo-50">
+              <ArrowLeft size={16} />
+            </div>
             <span className="hidden sm:inline">Catálogo Mallorca</span>
-            <span className="sm:hidden">Volver</span>
           </Link>
           <div className="flex items-center gap-2">
-            <Building2 size={18} className="text-amber-400" />
-            <span className="font-semibold text-sm tracking-wide">MALLORCA LIFESTYLE</span>
+            <Building2 size={20} className="text-indigo-600" />
+            <span className="font-bold text-sm tracking-widest text-slate-900 uppercase">Mallorca Lifestyle</span>
           </div>
-          <div className="w-20" /> {/* Spacer for centering */}
+          <div className="w-8 sm:w-32" /> {/* Spacer */}
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 py-6 pb-20">
+      <main className="max-w-6xl mx-auto px-4 py-8 pb-24">
 
         {/* ─── Title ─── */}
-        <div className="text-center mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold mb-2">
-            <span className="bg-gradient-to-r from-amber-200 to-amber-400 bg-clip-text text-transparent">
-              Buscador de Propiedades
-            </span>
+        <div className="text-center mb-10">
+          <span className="inline-block px-3 py-1 bg-indigo-50 text-indigo-700 text-[10px] font-black uppercase tracking-widest rounded-full mb-3">
+            Herramienta Asesor
+          </span>
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-3 tracking-tight text-slate-900">
+            Buscador de Propiedades
           </h1>
-          <p className="text-slate-400 text-sm max-w-md mx-auto">
-            Busca en Inmuebles24, Vivanuncios, Mercado Libre y más portales inmobiliarios simultáneamente.
+          <p className="text-slate-500 text-sm sm:text-base max-w-lg mx-auto">
+            Encuentra prospectos comparables en Inmuebles24, Vivanuncios y Mercado Libre.
           </p>
         </div>
 
         {/* ─── Search Form ─── */}
-        <div className="relative mb-8 p-5 rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-md">
+        <div className="relative mb-10 p-6 sm:p-8 rounded-[2rem] bg-white border border-slate-200 shadow-xl shadow-slate-200/50">
 
           {/* Tipo: Renta / Venta */}
-          <div className="flex justify-center mb-5">
-            <div className="inline-flex rounded-full p-1 bg-slate-800/80 border border-white/10">
+          <div className="flex justify-center mb-6">
+            <div className="inline-flex rounded-xl p-1 bg-slate-100 border border-slate-200">
               {['renta', 'venta'].map(t => (
                 <button
                   key={t}
                   onClick={() => update('tipo', t)}
-                  className={`px-5 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                  className={`px-6 py-2.5 rounded-lg text-sm font-bold uppercase tracking-wider transition-all duration-300 ${
                     params.tipo === t
-                      ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'bg-white text-indigo-700 shadow-md transform scale-[1.02]'
+                      : 'text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  {t === 'renta' ? '🏠 Renta' : '💰 Venta'}
+                  {t === 'renta' ? 'Renta' : 'Venta'}
                 </button>
               ))}
             </div>
           </div>
 
           {/* Filters Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-5">
 
             {/* Tipo Propiedad */}
             <div className="col-span-2 sm:col-span-1">
-              <label className="text-xs text-slate-500 mb-1 block">Tipo</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Inmueble</label>
               <select
                 value={params.tipoPropiedad}
                 onChange={e => update('tipoPropiedad', e.target.value)}
-                className="w-full bg-slate-800/60 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/50 transition-colors"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 text-sm text-slate-700 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-medium"
               >
                 <option value="">Cualquiera</option>
                 <option value="casa">Casa</option>
@@ -228,72 +233,70 @@ export default function PropertySearch() {
                 <option value="terreno">Terreno</option>
                 <option value="local comercial">Local Comercial</option>
                 <option value="oficina">Oficina</option>
-                <option value="bodega">Bodega</option>
               </select>
             </div>
 
             {/* Zona */}
             <div className="col-span-2 sm:col-span-2 lg:col-span-1">
-              <label className="text-xs text-slate-500 mb-1 block">Zona</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Ubicación</label>
               <input
                 type="text"
                 value={params.zona}
                 onChange={e => update('zona', e.target.value)}
-                placeholder="Ej: Metepec, Toluca"
-                className="w-full bg-slate-800/60 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500/50 transition-colors"
+                placeholder="Ej: Metepec..."
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-medium"
               />
             </div>
 
             {/* Precio Min */}
             <div>
-              <label className="text-xs text-slate-500 mb-1 block">Precio mín</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Mínimo</label>
               <input
                 type="text"
                 inputMode="numeric"
-                value={params.precioMin}
+                value={params.precioMin ? formatter.format(Number(params.precioMin)) : ''}
                 onChange={e => update('precioMin', e.target.value.replace(/\D/g, ''))}
                 placeholder="$0"
-                className="w-full bg-slate-800/60 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500/50 transition-colors"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-medium"
               />
             </div>
 
             {/* Precio Max */}
             <div>
-              <label className="text-xs text-slate-500 mb-1 block">Precio máx</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Máximo</label>
               <input
                 type="text"
                 inputMode="numeric"
-                value={params.precioMax}
+                value={params.precioMax ? formatter.format(Number(params.precioMax)) : ''}
                 onChange={e => update('precioMax', e.target.value.replace(/\D/g, ''))}
                 placeholder="Sin límite"
-                className="w-full bg-slate-800/60 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500/50 transition-colors"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-medium"
               />
             </div>
 
             {/* Recámaras */}
             <div>
-              <label className="text-xs text-slate-500 mb-1 block">Recámaras</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Recámaras</label>
               <select
                 value={params.recamaras}
                 onChange={e => update('recamaras', e.target.value)}
-                className="w-full bg-slate-800/60 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/50 transition-colors"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 text-sm text-slate-700 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-medium"
               >
                 <option value="">Todas</option>
                 <option value="1">1</option>
                 <option value="2">2</option>
                 <option value="3">3</option>
-                <option value="4">4</option>
-                <option value="5+">5+</option>
+                <option value="4+">4+</option>
               </select>
             </div>
 
             {/* Baños */}
             <div>
-              <label className="text-xs text-slate-500 mb-1 block">Baños</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Baños</label>
               <select
                 value={params.banos}
                 onChange={e => update('banos', e.target.value)}
-                className="w-full bg-slate-800/60 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/50 transition-colors"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 text-sm text-slate-700 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-medium"
               >
                 <option value="">Todos</option>
                 <option value="1">1</option>
@@ -305,22 +308,22 @@ export default function PropertySearch() {
           </div>
 
           {/* Free Text + Voice */}
-          <div className="relative mb-4">
+          <div className="relative mb-6">
             <textarea
               value={params.query}
               onChange={e => update('query', e.target.value)}
-              placeholder='Describe lo que buscas... Ej: "casa con jardín amplio cerca de escuelas"'
+              placeholder='Términos clave ej: "amplio jardín", "seguridad privada"'
               rows={2}
-              className="w-full bg-slate-800/60 border border-white/10 rounded-lg px-4 py-3 pr-12 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500/50 transition-colors resize-none"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 pr-14 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all resize-none font-medium"
             />
             <button
               onClick={toggleVoice}
-              className={`absolute right-3 top-3 p-2 rounded-full transition-all duration-200 ${
+              className={`absolute right-3 top-3 p-2.5 rounded-lg transition-all duration-200 ${
                 isListening
-                  ? 'bg-red-500 text-white animate-pulse'
-                  : 'bg-slate-700 text-slate-400 hover:bg-slate-600 hover:text-white'
+                  ? 'bg-red-100 text-red-600 animate-pulse'
+                  : 'bg-white text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 shadow-sm'
               }`}
-              title={isListening ? 'Detener' : 'Hablar'}
+              title={isListening ? 'Detener' : 'Díctale a la app'}
             >
               {isListening ? <MicOff size={16} /> : <Mic size={16} />}
             </button>
@@ -330,12 +333,12 @@ export default function PropertySearch() {
           <button
             onClick={handleSearch}
             disabled={loading}
-            className="w-full py-3 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 hover:from-amber-400 hover:to-amber-500 shadow-lg shadow-amber-500/20 hover:shadow-amber-500/30"
+            className="w-full py-4 rounded-xl font-black text-xs uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2 disabled:opacity-70 bg-slate-900 text-white hover:bg-indigo-600 hover:shadow-xl hover:shadow-indigo-600/20"
           >
             {loading ? (
-              <><Loader2 size={16} className="animate-spin" /> Buscando...</>
+              <><Loader2 size={16} className="animate-spin" /> Procesando búsqueda</>
             ) : (
-              <><Search size={16} /> Buscar Propiedades</>
+              <><Search size={16} /> Buscar en Portales</>
             )}
           </button>
         </div>
@@ -347,9 +350,9 @@ export default function PropertySearch() {
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-sm flex items-start gap-3"
+              className="mb-8 p-4 rounded-xl justify-center bg-red-50 border border-red-100 text-red-600 text-sm font-semibold flex items-center gap-3 shadow-sm"
             >
-              <X size={16} className="mt-0.5 flex-shrink-0" />
+              <X size={16} className="flex-shrink-0" />
               <span>{error}</span>
             </motion.div>
           )}
@@ -362,23 +365,14 @@ export default function PropertySearch() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="mb-8 p-6 rounded-2xl border border-white/10 bg-white/[0.02]"
+              className="mb-8 p-8 rounded-2xl bg-white border border-slate-100 shadow-sm text-center"
             >
-              <div className="space-y-4">
+              <Loader2 size={32} className="animate-spin text-indigo-500 mx-auto mb-4" />
+              <div className="flex flex-col items-center gap-2">
                 {LOADING_STEPS.map((step, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <span className="text-lg">{step.icon}</span>
-                    <span className={`text-sm transition-colors duration-500 ${
-                      i <= loadingStep ? 'text-white' : 'text-slate-600'
-                    }`}>
-                      {step.label}
-                    </span>
-                    {i < loadingStep && (
-                      <span className="text-emerald-400 text-xs ml-auto">✓</span>
-                    )}
-                    {i === loadingStep && (
-                      <Loader2 size={14} className="animate-spin text-amber-400 ml-auto" />
-                    )}
+                  <div key={i} className={`flex items-center gap-2 text-sm font-medium transition-opacity duration-300 ${i === loadingStep ? 'text-indigo-700 opacity-100' : 'text-slate-400 opacity-50'}`}>
+                    <span>{step.icon}</span>
+                    <span>{step.label}</span>
                   </div>
                 ))}
               </div>
@@ -389,25 +383,25 @@ export default function PropertySearch() {
         {/* ─── Results ─── */}
         {!loading && searched && (
           <div>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-white">
+            <div className="flex items-center justify-between mb-6 px-2">
+              <h2 className="text-lg font-bold text-slate-800">
                 {results.length > 0
-                  ? `${results.length} propiedades encontradas`
+                  ? `Se encontraron ${results.length} coincidencias`
                   : 'Sin resultados'}
               </h2>
             </div>
 
             {results.length === 0 && (
-              <div className="text-center py-16">
-                <Home size={48} className="mx-auto text-slate-700 mb-4" />
-                <p className="text-slate-500 text-sm">
-                  No encontramos propiedades con esos criterios.<br />
-                  Intenta con filtros más amplios o una descripción diferente.
+              <div className="text-center py-20 bg-white rounded-3xl border border-slate-100 shadow-sm">
+                <Home size={48} className="mx-auto text-slate-300 mb-4" />
+                <p className="text-slate-600 font-medium">
+                  No pudimos hallar nada con esos filtros.<br />
+                  Intenta ser menos específico o cambia la zona.
                 </p>
               </div>
             )}
 
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               <AnimatePresence>
                 {results.map((prop, i) => (
                   <PropertyCard key={`${prop.url}-${i}`} property={prop} index={i} />
@@ -417,15 +411,12 @@ export default function PropertySearch() {
           </div>
         )}
 
-        {/* ─── Empty State (before first search) ─── */}
+        {/* ─── Empty State ─── */}
         {!loading && !searched && (
-          <div className="text-center py-12">
-            <Search size={48} className="mx-auto text-slate-800 mb-4" />
-            <p className="text-slate-600 text-sm">
-              Llena los filtros o describe lo que buscas y presiona <strong className="text-slate-400">Buscar</strong>.
-            </p>
-            <p className="text-slate-700 text-xs mt-2">
-              Buscamos en Inmuebles24, Vivanuncios, Mercado Libre, Realty World, NocNok y más.
+          <div className="text-center py-16 opacity-60">
+            <Search size={48} className="mx-auto text-slate-300 mb-4" />
+            <p className="text-slate-500 text-sm font-medium">
+              Define tus criterios arriba e inicia la búsqueda.
             </p>
           </div>
         )}
@@ -440,7 +431,7 @@ function PropertyCard({ property: p, index }: { property: Property; index: numbe
 
   const whatsappUrl = p.contacto
     ? `https://wa.me/${p.contacto.replace(/[^0-9+]/g, '')}?text=${encodeURIComponent(
-        `Hola, estoy interesado en la propiedad: ${p.titulo}. ¿Podrían darme más información?`
+        `Hola, estoy interesado en la propiedad: ${p.titulo}. Lo vi a través del cotizador.`
       )}`
     : null;
 
@@ -449,13 +440,13 @@ function PropertyCard({ property: p, index }: { property: Property; index: numbe
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05, duration: 0.3 }}
-      className="group rounded-xl border border-white/8 bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/15 transition-all duration-300 overflow-hidden flex flex-col"
+      className="group bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:border-indigo-100 transition-all duration-300 overflow-hidden flex flex-col"
     >
-      {/* Card Header */}
-      <div className="px-4 pt-4 pb-3">
+      {/* Card Header & Body */}
+      <div className="p-6 pb-2 flex-grow">
         {/* Portal Badge */}
         <span
-          className="inline-block text-[11px] font-semibold px-2.5 py-1 rounded-full mb-3"
+          className="inline-block text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full mb-4"
           style={{
             background: style.bg,
             color: style.text,
@@ -466,78 +457,90 @@ function PropertyCard({ property: p, index }: { property: Property; index: numbe
         </span>
 
         {/* Title */}
-        <h3 className="text-sm font-semibold text-white leading-snug mb-2 line-clamp-2 min-h-[2.5rem]">
+        <h3 className="text-base font-bold text-slate-900 leading-snug mb-3 line-clamp-2 min-h-[3rem]">
           {p.titulo}
         </h3>
 
         {/* Price */}
         {p.precio && (
-          <p className="text-lg font-bold text-amber-400 mb-2">{p.precio}</p>
+          <p className="text-2xl font-light tracking-tight text-indigo-900 mb-3">{p.precio}</p>
         )}
 
         {/* Location */}
         {p.ubicacion && (
-          <div className="flex items-center gap-1.5 text-slate-400 text-xs mb-3">
-            <MapPin size={12} />
-            <span className="line-clamp-1">{p.ubicacion}</span>
+          <div className="flex items-center gap-1.5 text-slate-500 text-xs font-medium mb-4 bg-slate-50 py-1.5 px-3 rounded-lg border border-slate-100">
+            <MapPin size={14} className="text-slate-400" />
+            <span className="line-clamp-1 truncate">{p.ubicacion}</span>
+          </div>
+        )}
+
+        {/* Specs Grid */}
+        {(p.recamaras || p.banos || p.m2) && (
+          <div className="grid grid-cols-3 gap-2 mb-4 border-t border-b border-slate-100 py-3">
+            {p.recamaras && (
+              <div className="flex flex-col items-center justify-center text-center">
+                <BedDouble size={16} className="text-slate-400 mb-1" />
+                <span className="text-xs font-bold text-slate-700">{p.recamaras}</span>
+                <span className="text-[9px] uppercase tracking-widest text-slate-400">Rec</span>
+              </div>
+            )}
+            {p.banos && (
+              <div className="flex flex-col items-center justify-center text-center border-l border-r border-slate-100">
+                <Bath size={16} className="text-slate-400 mb-1" />
+                <span className="text-xs font-bold text-slate-700">{p.banos}</span>
+                <span className="text-[9px] uppercase tracking-widest text-slate-400">Baños</span>
+              </div>
+            )}
+            {p.m2 && (
+              <div className="flex flex-col items-center justify-center text-center">
+                <Ruler size={16} className="text-slate-400 mb-1" />
+                <span className="text-xs font-bold text-slate-700">{p.m2}</span>
+                <span className="text-[9px] uppercase tracking-widest text-slate-400">m²</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Description */}
+        {p.descripcion && (
+          <div className="text-xs text-slate-500 leading-relaxed line-clamp-3 mb-4">
+            {p.descripcion}
           </div>
         )}
       </div>
 
-      {/* Specs */}
-      {(p.recamaras || p.banos || p.m2) && (
-        <div className="px-4 py-2.5 border-t border-white/5 flex items-center gap-4 text-xs text-slate-400">
-          {p.recamaras && (
-            <span className="flex items-center gap-1">
-              <BedDouble size={13} className="text-slate-500" /> {p.recamaras} rec.
-            </span>
-          )}
-          {p.banos && (
-            <span className="flex items-center gap-1">
-              <Bath size={13} className="text-slate-500" /> {p.banos} baños
-            </span>
-          )}
-          {p.m2 && (
-            <span className="flex items-center gap-1">
-              <Ruler size={13} className="text-slate-500" /> {p.m2} m²
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Description */}
-      {p.descripcion && (
-        <div className="px-4 py-2 text-xs text-slate-500 line-clamp-2">
-          {p.descripcion}
-        </div>
-      )}
-
-      {/* Contact */}
+      {/* Contact Info */}
       {p.contacto && (
-        <div className="px-4 py-2 border-t border-white/5">
-          <div className="flex items-center gap-1.5 text-xs text-emerald-400">
-            <Phone size={12} />
-            <span className="font-medium">{p.contacto}</span>
-          </div>
+        <div className="px-6 py-3 bg-emerald-50/50 border-t border-emerald-100 mx-4 mb-2 rounded-xl flex items-center justify-center gap-2">
+          <Phone size={14} className="text-emerald-600" />
+          <span className="text-xs font-bold text-emerald-800 tracking-wide">{p.contacto}</span>
         </div>
       )}
 
-      {/* Actions */}
-      <div className="mt-auto px-4 py-3 border-t border-white/5 flex gap-2">
+      {/* Footer Actions */}
+      <div className="mt-auto px-6 py-5 bg-slate-50 border-t border-slate-100 flex gap-3">
         <a
           href={p.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex-1 py-2 rounded-lg text-xs font-medium text-center transition-colors bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center justify-center gap-1.5"
+          className="flex-1 py-3 rounded-xl text-xs font-bold text-center transition-colors bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900 flex items-center justify-center gap-2 shadow-sm"
         >
-          <ExternalLink size={12} /> Ver publicación
+          <ExternalLink size={14} /> Visitar
         </a>
         {whatsappUrl && (
           <a
             href={whatsappUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="py-2 px-3 rounded-lg text-xs font-medium transition-colors bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 flex items-center gap-1.5"
+            className="flex-1 py-3 rounded-xl text-xs font-bold transition-all bg-emerald-500 text-white hover:bg-emerald-600 flex items-center justify-center gap-2 shadow-sm shadow-emerald-500/20"
+          >
+            <MessageCircle size={14} /> Chat
+          </a>
+        )}
+      </div>
+    </motion.div>
+  );
+}g-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 flex items-center gap-1.5"
           >
             <MessageCircle size={12} /> WhatsApp
           </a>

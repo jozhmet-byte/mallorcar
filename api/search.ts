@@ -1,4 +1,6 @@
-export const config = { maxDuration: 60 };
+export const config = { 
+  runtime: 'edge'
+};
 
 const DEEPSEEK_KEY = process.env.DEEPSEEK_API_KEY!;
 const SERPER_KEY = process.env.SERPER_API_KEY!;
@@ -76,7 +78,7 @@ async function searchSerper(query: string) {
   return res.json();
 }
 
-// ── Step 2: DeepSeek structures snippets (NO Jina needed) ─────────────
+// ── Step 2: DeepSeek structures snippets ─────────────────────────────────────
 async function structureWithDeepSeek(
   results: { title: string; snippet: string; link: string; portal: string }[]
 ) {
@@ -87,18 +89,25 @@ async function structureWithDeepSeek(
     )
     .join('\n\n');
 
-  const res = await fetch('https://api.deepseek.com/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${DEEPSEEK_KEY}`,
-    },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages: [
-        {
-          role: 'system',
-          content: `Eres un extractor de datos inmobiliarios. Dado los títulos y snippets de Google de publicaciones de propiedades en México, extrae la información en JSON.
+  // Vercel Hobby limits functions to 10 seconds.
+  // We apply a strict 6.5s timeout to DeepSeek so the function never 504s.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 6500);
+
+  try {
+    const res = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${DEEPSEEK_KEY}`,
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          {
+            role: 'system',
+            content: `Eres un extractor de datos inmobiliarios. Dado los títulos y snippets de Google de publicaciones de propiedades en México, extrae la información en JSON.
 
 Para cada propiedad extrae:
 - titulo: string (limpio y conciso)
@@ -110,30 +119,33 @@ Para cada propiedad extrae:
 - descripcion: string (máx 80 chars con las características principales)
 
 REGLAS:
-- Extrae SOLO lo que aparezca explícitamente en el título/snippet.
+- Extrae SOLO lo que aparezca explícitamente.
 - Si no encuentras un dato, pon null.
 - Responde ÚNICAMENTE con un JSON array válido, sin markdown ni texto adicional.`,
-        },
-        {
-          role: 'user',
-          content: `Extrae datos de estas ${results.length} propiedades:\n\n${listingsText}`,
-        },
-      ],
-      max_tokens: 2000,
-      temperature: 0,
-    }),
-  });
+          },
+          {
+            role: 'user',
+            content: `Extrae datos de estas ${results.length} propiedades:\n\n${listingsText}`,
+          },
+        ],
+        max_tokens: 1000,
+        temperature: 0,
+      }),
+    });
 
-  if (!res.ok) return null;
-  const data = await res.json();
-  const content = data.choices?.[0]?.message?.content;
-  if (!content) return null;
+    clearTimeout(timeoutId);
 
-  try {
+    if (!res.ok) return null;
+    const data = await res.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) return null;
+
     const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     return JSON.parse(cleaned);
-  } catch {
-    return null;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    console.error('DeepSeek timeout or error:', error);
+    return null; // Gracefully fallback to raw snippets if it timeouts
   }
 }
 
@@ -165,28 +177,28 @@ export default async function handler(request: Request) {
       return new Response(JSON.stringify({ properties: [], query, total: 0 }), { headers });
     }
 
-    // 2) Prepare data for DeepSeek — use Google titles + snippets directly (NO Jina)
-    const top10 = organic.slice(0, 10).map((r: any) => ({
+    // 2) Prepare data for DeepSeek (Limit to top 6 to make DeepSeek process much faster)
+    const topResults = organic.slice(0, 6).map((r: any) => ({
       title: r.title || '',
       snippet: r.snippet || '',
       link: r.link,
       portal: detectPortal(r.link),
     }));
 
-    // 3) DeepSeek structures the snippets (~2-4s)
-    const structured = await structureWithDeepSeek(top10);
+    // 3) DeepSeek structures the snippets (timeout limits it to max 6.5s)
+    const structured = await structureWithDeepSeek(topResults);
 
     let properties: any[];
 
-    if (structured && Array.isArray(structured)) {
+    if (structured && Array.isArray(structured) && structured.length > 0) {
       properties = structured.map((item: any, i: number) => ({
         ...item,
-        url: top10[i]?.link || '',
-        portal: top10[i]?.portal || 'Otro',
+        url: topResults[i]?.link || '',
+        portal: topResults[i]?.portal || 'Otro',
       }));
     } else {
-      // Fallback: return basic results from Serper snippets
-      properties = top10.map((r) => ({
+      // Fallback: return basic results from Serper snippets if DeepSeek fails/times out
+      properties = topResults.map((r) => ({
         titulo: r.title,
         precio: null,
         ubicacion: null,
@@ -200,8 +212,8 @@ export default async function handler(request: Request) {
       }));
     }
 
-    // 4) Append remaining results as basic entries
-    organic.slice(10).forEach((r: any) => {
+    // 4) Append remaining results as basic entries directly from Google
+    organic.slice(6).forEach((r: any) => {
       properties.push({
         titulo: r.title || 'Propiedad encontrada',
         precio: null,
