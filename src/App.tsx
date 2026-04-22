@@ -714,11 +714,10 @@ const App = () => {
       ['20%', fmt(lot.precio * 0.2), fmt(principal20)],
       ['30%', fmt(lot.precio * 0.3), fmt(principal30)],
       ['50%', fmt(lot.precio * 0.5), fmt(principal50)],
-      ['100% (-7%)', fmt(lot.precio * 0.93), '—'],
     ];
 
     doc.setFont('helvetica', 'normal');
-    for (let r = 0; r < 4; r++) {
+    for (let r = 0; r < 3; r++) {
       if (r % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(15, y, w - 30, 6, 'F'); }
       doc.setTextColor(30, 41, 59);
       dpData[r].forEach((cell, ci) => doc.text(cell, 17 + ci * 55, y + 4));
@@ -760,22 +759,7 @@ const App = () => {
     doc.setTextColor(148, 163, 184);
     doc.text('* Remitirse a su banco para una proyección oficial.', 15, y);
     
-    y += 6;
-
-    // Cash incentive
-    doc.setFillColor(236, 253, 245);
-    doc.setDrawColor(167, 243, 208);
-    doc.roundedRect(15, y, w - 30, 16, 2, 2, 'FD');
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(6, 78, 59);
-    doc.text('Incentivo Pago de Contado (7% descuento)', 22, y + 6);
-    doc.setFontSize(11);
-    doc.text(`Precio Final: ${fmt(lot.precio * 0.93)}`, 22, y + 12);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Ahorro de: ${fmt(lot.precio * 0.07)}`, w - 15, y + 12, { align: 'right' });
-    y += 24;
+    y += 10;
 
     // Bottom extra info
     doc.setFontSize(6.5);
@@ -821,7 +805,6 @@ const App = () => {
       ``,
       `💰 *Precio: ${formatter.format(lot.precio)}*`,
       `🏦 Enganche 20%: ${formatter.format(lot.precio * 0.2)}`,
-      `✅ Contado (-7%): ${formatter.format(lot.precio * 0.93)}`,
     ].join('\n');
 
     try {
