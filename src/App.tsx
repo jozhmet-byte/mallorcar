@@ -910,11 +910,6 @@ const App = () => {
           <div className="relative w-full h-56 lg:h-80 overflow-hidden mb-12">
             <img src="/hero-mallorca.jpg" alt="Mallorca Lifestyle - Desarrollo" className="w-full h-full object-cover" />
             <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 to-transparent" />
-            <div className="absolute bottom-6 left-6 lg:left-12 hidden md:block">
-              <span className="bg-white/90 backdrop-blur-sm text-slate-800 text-[10px] font-black uppercase tracking-[0.2em] px-4 py-2 rounded-full shadow-lg">
-                C. 16 de Septiembre & Vicente Guerrero, San Salvador Tizatlalli, Metepec
-              </span>
-            </div>
           </div>
           
           {/* House Models Showcase Layout */}
