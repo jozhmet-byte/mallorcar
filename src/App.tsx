@@ -28,7 +28,8 @@ import {
   Flame,
   Droplets,
   Home,
-  Shirt
+  Shirt,
+  FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
@@ -805,6 +806,8 @@ const App = () => {
       ``,
       `💰 *Precio: ${formatter.format(lot.precio)}*`,
       `🏦 Enganche 20%: ${formatter.format(lot.precio * 0.2)}`,
+      ``,
+      `📖 *Conoce el desarrollo (Brochure):* ${window.location.origin}/Brochure_Mallorca_1.pdf`
     ].join('\n');
 
     try {
@@ -856,6 +859,12 @@ const App = () => {
               <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-widest border border-emerald-100">
                 {allAvailable.length} Disponibles (Etapa 1 y 2)
               </span>
+              <a href="/Brochure_Mallorca_1.pdf" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-widest border border-indigo-100 hover:bg-indigo-100 transition-colors">
+                <FileText size={12} /> Ver Brochure
+              </a>
+              <a href="/Brochure_Mallorca_1.pdf" download="Brochure_Mallorca.pdf" className="flex items-center gap-1.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-widest border border-indigo-100 hover:bg-indigo-100 transition-colors">
+                <Download size={12} /> Descargar
+              </a>
             </div>
           </div>
 
