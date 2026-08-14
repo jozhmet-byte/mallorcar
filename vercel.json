@@ -5,6 +5,10 @@
       "destination": "/api/:path*"
     },
     {
+      "source": "/propuesta_interactiva.html",
+      "destination": "/propuesta_interactiva.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
