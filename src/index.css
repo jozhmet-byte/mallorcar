@@ -5,3 +5,9 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Playfair Display", ui-serif, Georgia, serif;
 }
+
+/* Navegación con teclado: foco visible en lotes del mapa, filas y tarjetas */
+.lot-node:focus { outline: none; }
+.lot-node:focus-visible > rect:not([fill="none"]) { stroke: #6366f1; stroke-width: 4; }
+tr[tabindex]:focus-visible,
+[data-lot-card]:focus-visible { outline: 2px solid #6366f1; outline-offset: -2px; }

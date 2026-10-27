@@ -1,7 +1,9 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Map as MapIcon, 
-  ChevronRight, 
+  ChevronLeft,
+  ChevronRight,
+  Link2, 
   Filter,
   List,
   Check,
@@ -32,8 +34,23 @@ import {
   FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { jsPDF } from 'jspdf';
+
+export interface LotItem {
+  id: string;
+  etapa: number;
+  lote: string;
+  prototipo: 'ANGELINA' | 'VANESSA' | 'RAQUEL';
+  m2t: number;
+  m2Exc?: number;
+  m2c: number;
+  precio: number;
+  nota?: string;
+  club: number;
+  estado: 'disponible' | 'apartada' | 'vendida';
+}
 
 const MODEL_FEATURES_TEXT: Record<string, string[]> = {
   'Raquel': ['3 Recámaras c/baño', 'Comedor', 'Sala de TV', '3 Autos', 'Cuarto de Servicio c/baño', 'Jardín con Asador', '½ Baño de visitas', 'Roof Garden', 'Cuarto de lavado', 'Bodega exterior'],
@@ -41,11 +58,67 @@ const MODEL_FEATURES_TEXT: Record<string, string[]> = {
   'Angelina': ['3 Recámaras c/baño', 'Comedor', 'Sala', '3 Autos', 'Estudio', 'Jardín con Asador', '½ Baño de visitas', 'Roof Garden', 'Sala de TV', 'Cuarto de lavado']
 };
 
+// Totales oficiales por etapa (incluye vendidas) — Etapa 1: 26, Etapa 2: 25
+const STAGE_TOTALS: Record<number, number> = { 1: 26, 2: 25 };
+
+// Paleta única de estados, compartida por mapa, minimapa y leyenda
+const LOT_COLORS = {
+  disponible: { fill: '#a7f3d0', text: '#064e3b' },
+  apartada: { fill: '#fde68a', text: '#78350f' },
+  vendida: { fill: '#f1f5f9', text: '#cbd5e1' },
+  seleccionado: { fill: '#312e81', text: '#ffffff' },
+};
+
+const ANNUAL_RATE = 0.11;
+
+const monthlyPayment = (price: number, downPct: number, years: number) => {
+  const rate = ANNUAL_RATE / 12;
+  const months = years * 12;
+  const principal = price * (1 - downPct);
+  return (principal * rate) / (1 - Math.pow(1 + rate, -months));
+};
+
+const formatShortMXN = (n: number) => `$${(n / 1_000_000).toFixed(1)}M`;
+
+const toTitle = (s: string) => s.charAt(0) + s.slice(1).toLowerCase();
+
 const App = () => {
-  const [activeStage, setActiveStage] = useState(2);
+  // El lote seleccionado vive en la URL (?lote=E2-17): permite compartir enlaces
+  // y que el botón "Atrás" del navegador/celular cierre la ficha en lugar de salir del sitio.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const selectedLotId = searchParams.get('lote');
+  const setSelectedLotId = (id: string | null) => {
+    const current = searchParams.get('lote');
+    if (id === current) return;
+    if (id) {
+      // Abrir la ficha agrega una entrada al historial; cambiar de lote con la ficha abierta la reemplaza
+      setSearchParams(prev => {
+        const next = new URLSearchParams(prev);
+        next.set('lote', id);
+        return next;
+      }, { replace: Boolean(current), state: current ? location.state : { lotOpened: true } });
+    } else if ((location.state as { lotOpened?: boolean } | null)?.lotOpened) {
+      navigate(-1);
+    } else {
+      // Llegó por enlace compartido: cerrar sin salir del sitio
+      setSearchParams(prev => {
+        const next = new URLSearchParams(prev);
+        next.delete('lote');
+        return next;
+      }, { replace: true });
+    }
+  };
+  const mapClickRef = useRef({ x: 0, y: 0 });
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const [activeStage, setActiveStage] = useState(() => {
+    const initialLot = new URLSearchParams(window.location.search).get('lote');
+    return initialLot && !initialLot.startsWith('E2-') ? 1 : 2;
+  });
   const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
   const [filterPrototype, setFilterPrototype] = useState('Todos');
-  const [selectedLotId, setSelectedLotId] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [activeTab, setActiveTab] = useState<'desarrollo' | 'modelos'>('desarrollo');
   const [downPaymentPct, setDownPaymentPct] = useState(0.2);
@@ -64,6 +137,39 @@ const App = () => {
   
   const mapContainerRef = useRef<HTMLDivElement>(null);
 
+  const stage1Available: LotItem[] = [
+    { id: '5', etapa: 1, lote: '5', prototipo: 'VANESSA', m2t: 206.62, m2Exc: 26.62, m2c: 232.52, precio: 7052355, nota: 'Última Vanessa', club: 80000, estado: 'disponible' },
+    { id: '9', etapa: 1, lote: '9', prototipo: 'VANESSA', m2t: 205.23, m2Exc: 25.23, m2c: 232.52, precio: 7342000, nota: 'Esquina', club: 80000, estado: 'disponible' },
+  ];
+
+  // Lista de Precios Oficial Etapa 2 — Vigencia 31 de Julio del 2026
+  const stage2Available: LotItem[] = [
+    { id: 'E2-1', etapa: 2, lote: 'E2-1', prototipo: 'RAQUEL', m2t: 237.39, m2Exc: 57.39, m2c: 261.51, precio: 9558859, club: 90000, estado: 'disponible' },
+    { id: 'E2-2', etapa: 2, lote: 'E2-2', prototipo: 'RAQUEL', m2t: 216.63, m2Exc: 36.63, m2c: 261.51, precio: 9272371, club: 90000, estado: 'disponible' },
+    { id: 'E2-3', etapa: 2, lote: 'E2-3', prototipo: 'RAQUEL', m2t: 214.35, m2Exc: 34.35, m2c: 261.51, precio: 9240907, club: 90000, estado: 'disponible' },
+    { id: 'E2-4', etapa: 2, lote: 'E2-4', prototipo: 'VANESSA', m2t: 212.07, m2Exc: 32.07, m2c: 232.52, precio: 8185414, club: 90000, estado: 'disponible' },
+    { id: 'E2-5', etapa: 2, lote: 'E2-5', prototipo: 'VANESSA', m2t: 209.80, m2Exc: 29.80, m2c: 232.52, precio: 8154088, club: 90000, estado: 'disponible' },
+    { id: 'E2-6', etapa: 2, lote: 'E2-6', prototipo: 'VANESSA', m2t: 207.52, m2Exc: 27.52, m2c: 232.52, precio: 8122624, club: 90000, estado: 'disponible' },
+    { id: 'E2-7', etapa: 2, lote: 'E2-7', prototipo: 'VANESSA', m2t: 205.24, m2Exc: 25.24, m2c: 232.52, precio: 8091160, club: 90000, estado: 'disponible' },
+    { id: 'E2-8', etapa: 2, lote: 'E2-8', prototipo: 'ANGELINA', m2t: 182.77, m2Exc: 2.77, m2c: 216.00, precio: 7278123, club: 90000, estado: 'disponible' },
+    { id: 'E2-9', etapa: 2, lote: 'E2-9', prototipo: 'ANGELINA', m2t: 180.93, m2Exc: 0.93, m2c: 216.00, precio: 7252731, club: 90000, estado: 'disponible' },
+    { id: 'E2-11', etapa: 2, lote: 'E2-11', prototipo: 'RAQUEL', m2t: 200.00, m2Exc: 20.00, m2c: 261.51, precio: 9042877, club: 90000, estado: 'disponible' },
+    { id: 'E2-12', etapa: 2, lote: 'E2-12', prototipo: 'VANESSA', m2t: 200.00, m2Exc: 20.00, m2c: 232.52, precio: 8018848, club: 90000, estado: 'disponible' },
+    { id: 'E2-13', etapa: 2, lote: 'E2-13', prototipo: 'VANESSA', m2t: 200.00, m2Exc: 20.00, m2c: 232.52, precio: 8018848, club: 90000, estado: 'disponible' },
+    { id: 'E2-14', etapa: 2, lote: 'E2-14', prototipo: 'RAQUEL', m2t: 200.00, m2Exc: 20.00, m2c: 261.51, precio: 9042877, club: 90000, estado: 'disponible' },
+    { id: 'E2-15', etapa: 2, lote: 'E2-15', prototipo: 'RAQUEL', m2t: 203.74, m2Exc: 23.74, m2c: 261.51, precio: 9094489, club: 90000, estado: 'disponible' },
+    { id: 'E2-16', etapa: 2, lote: 'E2-16', prototipo: 'ANGELINA', m2t: 180.03, m2Exc: 0, m2c: 215.39, precio: 6999810, club: 90000, estado: 'disponible' },
+    { id: 'E2-17', etapa: 2, lote: 'E2-17', prototipo: 'ANGELINA', m2t: 166.00, m2Exc: 0, m2c: 215.39, precio: 6999810, club: 90000, estado: 'disponible' },
+    { id: 'E2-18', etapa: 2, lote: 'E2-18', prototipo: 'ANGELINA', m2t: 162.00, m2Exc: 0, m2c: 215.39, precio: 6999810, club: 90000, estado: 'disponible' },
+    { id: 'E2-19', etapa: 2, lote: 'E2-19', prototipo: 'ANGELINA', m2t: 162.00, m2Exc: 0, m2c: 215.39, precio: 6999810, club: 90000, estado: 'disponible' },
+    { id: 'E2-20', etapa: 2, lote: 'E2-20', prototipo: 'ANGELINA', m2t: 225.00, m2Exc: 45.00, m2c: 215.39, precio: 7841816, nota: 'Apartada', club: 90000, estado: 'apartada' },
+    { id: 'E2-21', etapa: 2, lote: 'E2-21', prototipo: 'ANGELINA', m2t: 225.00, m2Exc: 45.00, m2c: 215.39, precio: 7841816, nota: 'Apartada', club: 90000, estado: 'apartada' },
+    { id: 'E2-22', etapa: 2, lote: 'E2-22', prototipo: 'RAQUEL', m2t: 250.00, m2Exc: 70.00, m2c: 261.51, precio: 9732877, club: 90000, estado: 'disponible' },
+    { id: 'E2-23', etapa: 2, lote: 'E2-23', prototipo: 'RAQUEL', m2t: 250.00, m2Exc: 70.00, m2c: 261.51, precio: 9732877, club: 90000, estado: 'disponible' },
+  ];
+
+  const allAvailable = [...stage1Available, ...stage2Available];
+
   // Helper to update tooltip position via DOM (no re-render)
   const showTooltip = (lotId: string, clientX: number, clientY: number) => {
     hoveredLotRef.current = lotId;
@@ -76,19 +182,24 @@ const App = () => {
     const flipX = clientX > window.innerWidth - 260;
     el.style.left = `${flipX ? clientX - 240 : clientX + 20}px`;
     el.style.top = `${clientY - 20}px`;
+    const isApartada = lot.estado === 'apartada';
     el.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <span style="font-weight:700;font-size:1.25rem">Lote ${lot.lote}</span>
-        <span style="background:rgba(79,70,229,0.2);color:#a5b4fc;border:1px solid rgba(79,70,229,0.3);padding:2px 8px;border-radius:9999px;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:0.05em">${lot.prototipo}</span>
+        <span style="background:${isApartada ? 'rgba(245,158,11,0.2)' : 'rgba(79,70,229,0.2)'};color:${isApartada ? '#f59e0b' : '#a5b4fc'};border:1px solid ${isApartada ? 'rgba(245,158,11,0.3)' : 'rgba(79,70,229,0.3)'};padding:2px 8px;border-radius:9999px;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:0.05em">${isApartada ? 'APARTADA' : lot.prototipo}</span>
       </div>
       <div style="height:1px;background:rgba(255,255,255,0.1);width:100%;margin-bottom:8px"></div>
       <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px">
         <span style="color:#94a3b8">Terreno:</span>
-        <span style="font-weight:500">${lot.m2t} m²</span>
+        <span style="font-weight:500">${lot.m2t} m² ${lot.m2Exc ? `(+${lot.m2Exc} m²)` : ''}</span>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px">
-        <span style="color:#94a3b8">Total:</span>
-        <span style="font-weight:700;color:#34d399">${formatter.format(lot.precio)}</span>
+        <span style="color:#94a3b8">Construcción:</span>
+        <span style="font-weight:500">${lot.m2c} m²</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px">
+        <span style="color:#94a3b8">${isApartada ? 'Valor Ref:' : 'Total:'}</span>
+        <span style="font-weight:700;color:${isApartada ? '#fbbf24' : '#34d399'}">${isApartada ? 'APARTADA (' + formatter.format(lot.precio) + ')' : formatter.format(lot.precio)}</span>
       </div>
     `;
   };
@@ -112,38 +223,6 @@ const App = () => {
     setDownPaymentPct(0.2);
   }, [selectedLotId]);
 
-  const stage1Available = [
-    { id: '5', etapa: 1, lote: '5', prototipo: 'VANESSA', m2t: 206.62, m2c: 232.52, precio: 7052355, nota: 'Última Vanessa', club: 80000 },
-    { id: '9', etapa: 1, lote: '9', prototipo: 'VANESSA', m2t: 205.23, m2c: 232.52, precio: 7342000, nota: 'Esquina', club: 80000 },
-  ];
-
-  const stage2Available = [
-    { id: 'E2-1', etapa: 2, lote: 'E2-1', prototipo: 'RAQUEL', m2t: 237.39, m2c: 261.51, precio: 9558859, nota: '', club: 90000 },
-    { id: 'E2-2', etapa: 2, lote: 'E2-2', prototipo: 'RAQUEL', m2t: 216.63, m2c: 261.51, precio: 9272371, nota: '', club: 90000 },
-    { id: 'E2-3', etapa: 2, lote: 'E2-3', prototipo: 'RAQUEL', m2t: 214.35, m2c: 261.51, precio: 9240907, nota: '', club: 90000 },
-    { id: 'E2-4', etapa: 2, lote: 'E2-4', prototipo: 'VANESSA', m2t: 212.07, m2c: 232.52, precio: 8185414, nota: '', club: 90000 },
-    { id: 'E2-5', etapa: 2, lote: 'E2-5', prototipo: 'VANESSA', m2t: 209.80, m2c: 232.52, precio: 8154088, nota: '', club: 90000 },
-    { id: 'E2-6', etapa: 2, lote: 'E2-6', prototipo: 'VANESSA', m2t: 207.52, m2c: 232.52, precio: 8122624, nota: '', club: 90000 },
-    { id: 'E2-7', etapa: 2, lote: 'E2-7', prototipo: 'VANESSA', m2t: 205.24, m2c: 232.52, precio: 8091160, nota: '', club: 90000 },
-    { id: 'E2-8', etapa: 2, lote: 'E2-8', prototipo: 'ANGELINA', m2t: 182.77, m2c: 216.00, precio: 7278123, nota: '', club: 90000 },
-    { id: 'E2-9', etapa: 2, lote: 'E2-9', prototipo: 'ANGELINA', m2t: 180.93, m2c: 216.00, precio: 7252731, nota: '', club: 90000 },
-    { id: 'E2-11', etapa: 2, lote: 'E2-11', prototipo: 'RAQUEL', m2t: 200.00, m2c: 261.51, precio: 9042877, nota: '', club: 90000 },
-    { id: 'E2-12', etapa: 2, lote: 'E2-12', prototipo: 'VANESSA', m2t: 200.00, m2c: 232.52, precio: 8018848, nota: '', club: 90000 },
-    { id: 'E2-13', etapa: 2, lote: 'E2-13', prototipo: 'VANESSA', m2t: 200.00, m2c: 232.52, precio: 8018848, nota: '', club: 90000 },
-    { id: 'E2-14', etapa: 2, lote: 'E2-14', prototipo: 'RAQUEL', m2t: 200.00, m2c: 261.51, precio: 9042877, nota: '', club: 90000 },
-    { id: 'E2-15', etapa: 2, lote: 'E2-15', prototipo: 'RAQUEL', m2t: 203.74, m2c: 261.51, precio: 9094489, nota: '', club: 90000 },
-    { id: 'E2-16', etapa: 2, lote: 'E2-16', prototipo: 'ANGELINA', m2t: 180.03, m2c: 215.39, precio: 6999810, club: 90000 },
-    { id: 'E2-17', etapa: 2, lote: 'E2-17', prototipo: 'ANGELINA', m2t: 166.00, m2c: 215.39, precio: 6999810, club: 90000 },
-    { id: 'E2-18', etapa: 2, lote: 'E2-18', prototipo: 'ANGELINA', m2t: 162.00, m2c: 215.39, precio: 6999810, club: 90000 },
-    { id: 'E2-19', etapa: 2, lote: 'E2-19', prototipo: 'ANGELINA', m2t: 162.00, m2c: 215.39, precio: 6999810, club: 90000 },
-    { id: 'E2-20', etapa: 2, lote: 'E2-20', prototipo: 'ANGELINA', m2t: 225.00, m2c: 215.39, precio: 7841816, club: 90000 },
-    { id: 'E2-21', etapa: 2, lote: 'E2-21', prototipo: 'ANGELINA', m2t: 225.00, m2c: 215.39, precio: 7841816, club: 90000 },
-    { id: 'E2-22', etapa: 2, lote: 'E2-22', prototipo: 'RAQUEL', m2t: 250.00, m2c: 261.51, precio: 9732877, club: 90000 },
-    { id: 'E2-23', etapa: 2, lote: 'E2-23', prototipo: 'RAQUEL', m2t: 250.00, m2c: 261.51, precio: 9732877, club: 90000 },
-  ];
-
-  const allAvailable = [...stage1Available, ...stage2Available];
-
   const filteredData = useMemo(() => {
     return allAvailable.filter(item => {
       const matchStage = item.etapa === activeStage;
@@ -155,6 +234,44 @@ const App = () => {
   const selectedLot = useMemo(() => {
     return allAvailable.find(item => item.id === selectedLotId);
   }, [selectedLotId]);
+
+  // Si el lote llega por URL (enlace compartido / Atrás-Adelante), mostrar su etapa
+  useEffect(() => {
+    if (selectedLot && selectedLot.etapa !== activeStage) setActiveStage(selectedLot.etapa);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLot]);
+
+  // Lotes recorribles con anterior/siguiente: misma etapa, respetando el filtro de modelo si aplica
+  const lotNavList = useMemo(() => {
+    if (!selectedLot) return [];
+    const sameStage = allAvailable.filter(l => l.etapa === selectedLot.etapa);
+    const filtered = sameStage.filter(l => filterPrototype === 'Todos' || l.prototipo === filterPrototype);
+    return filtered.some(l => l.id === selectedLot.id) ? filtered : sameStage;
+  }, [selectedLot, filterPrototype]);
+
+  const goToAdjacentLot = (dir: 1 | -1) => {
+    if (!selectedLot || lotNavList.length < 2) return;
+    const idx = lotNavList.findIndex(l => l.id === selectedLot.id);
+    const next = lotNavList[(idx + dir + lotNavList.length) % lotNavList.length];
+    setSelectedLotId(next.id);
+  };
+
+  // Atajos de teclado: Esc cierra (modal primero, luego ficha), ←/→ cambian de lote
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+      if (e.key === 'Escape') {
+        if (showQuoteModal) setShowQuoteModal(false);
+        else if (selectedLotId) setSelectedLotId(null);
+      } else if (selectedLotId && !showQuoteModal && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+        e.preventDefault();
+        goToAdjacentLot(e.key === 'ArrowRight' ? 1 : -1);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
 
   const sortedData = useMemo(() => {
     if (sortPrice === 'none') return filteredData;
@@ -174,76 +291,108 @@ const App = () => {
   // -------------------------------------------------------------
   // MASTER PLAN SVG
   // -------------------------------------------------------------
-  const MasterPlan = () => {
-    const clickRef = useRef({ x: 0, y: 0 });
+  // Función de render (no componente): así el TransformWrapper no se vuelve a montar
+  // en cada cambio de estado y el zoom/paneo del usuario se conserva.
+  const renderMasterPlan = () => {
+    const clickRef = mapClickRef;
 
     const renderLot = (loteNum: string, x: number, y: number, w: number, h: number, stage: number) => {
       const lotId = stage === 1 ? loteNum : `E2-${loteNum}`;
-      const isAvailable = allAvailable.some(a => a.id === lotId);
+      const lot = allAvailable.find(a => a.id === lotId);
+      const isAvailable = lot?.estado === 'disponible';
+      const isApartada = lot?.estado === 'apartada';
       const isSelected = selectedLotId === lotId;
-      const isHovered = false; // hover is handled via refs, not state
-      
-      let fillColor = "#f1f5f9"; // Vendido / Unavailable
-      let strokeColor = "#ffffff";
-      let strokeWidth = "2";
-      let textColor = "#cbd5e1";
+      const isClickable = isAvailable || isApartada;
+      const inActiveStage = stage === activeStage;
+      const matchesFilter = !lot || filterPrototype === 'Todos' || lot.prototipo === filterPrototype;
 
-      if (isAvailable) {
-        fillColor = "#a7f3d0"; // Disponible
-        textColor = "#064e3b";
-      }
-      if (isHovered && !isSelected && isAvailable) {
-        fillColor = "#6ee7b7"; // Hovered
-      }
-      if (isSelected) {
-        fillColor = "#312e81"; // Seleccionado (Premium Dark Indigo)
-        strokeColor = "#ffffff";
-        strokeWidth = "3";
-        textColor = "#ffffff";
-      }
+      const palette = isSelected
+        ? LOT_COLORS.seleccionado
+        : isAvailable ? LOT_COLORS.disponible
+        : isApartada ? LOT_COLORS.apartada
+        : LOT_COLORS.vendida;
+
+      // Los vendidos de la etapa inactiva se atenúan; los disponibles siempre quedan visibles
+      let opacity = 1;
+      if (!isClickable) opacity = inActiveStage ? 1 : 0.35;
+      else if (!matchesFilter) opacity = 0.25;
+
+      const showPrice = Boolean(isClickable && matchesFilter && lot);
+      const highlightOtherStage = isAvailable && !inActiveStage && !isSelected;
 
       return (
         <g 
           key={lotId} 
-          className={`transition-all duration-300 ${isAvailable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+          opacity={opacity}
+          className={`lot-node transition-opacity duration-300 ${isClickable ? 'cursor-pointer hover:opacity-90' : 'cursor-not-allowed'}`}
+          tabIndex={isClickable ? 0 : -1}
+          role={isClickable ? 'button' : undefined}
+          aria-label={lot ? `Lote ${lot.lote}, modelo ${toTitle(lot.prototipo)}, ${lot.estado}, ${formatter.format(lot.precio)}` : `Lote ${loteNum}, vendido`}
+          onKeyDown={(e) => {
+            if (!isClickable) return;
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              if (!inActiveStage) setActiveStage(stage);
+              setSelectedLotId(lotId);
+            }
+          }}
           onPointerDown={(e) => {
             clickRef.current = { x: e.clientX, y: e.clientY };
           }}
           onPointerUp={(e) => {
-            if (!isAvailable) return;
+            if (!isClickable) return;
             const dx = Math.abs(e.clientX - clickRef.current.x);
             const dy = Math.abs(e.clientY - clickRef.current.y);
-            if (dx < 5 && dy < 5) setSelectedLotId(lotId);
+            if (dx < 5 && dy < 5) {
+              if (!inActiveStage) setActiveStage(stage);
+              setSelectedLotId(lotId);
+            }
           }}
           onMouseMove={(e) => {
-            if (!isAvailable || isMobile) return;
+            if (!isClickable || isMobile) return;
             showTooltip(lotId, e.clientX, e.clientY);
           }}
           onMouseLeave={() => hideTooltip()}
-          style={{ transformOrigin: `${x + w/2}px ${y + h/2}px` }}
         >
+          {highlightOtherStage && (
+            <rect x={x - 4} y={y - 4} width={w + 8} height={h + 8} rx="7" fill="none" stroke="#10b981" strokeWidth="2" className="animate-pulse" />
+          )}
           <rect 
             x={isSelected ? x-2 : x} 
             y={isSelected ? y-2 : y} 
             width={isSelected ? w+4 : w} 
             height={isSelected ? h+4 : h} 
-            fill={fillColor} 
-            stroke={strokeColor} 
-            strokeWidth={strokeWidth} 
+            fill={palette.fill} 
+            stroke="#ffffff" 
+            strokeWidth={isSelected ? 3 : 2} 
             rx="4" 
             className="transition-all duration-300 drop-shadow-sm"
           />
           <text 
             x={x + w/2} 
-            y={y + h/2 + 4} 
+            y={showPrice ? y + h/2 - 1 : y + h/2 + 4} 
             textAnchor="middle" 
             fontSize="11" 
             fontWeight="bold" 
-            fill={textColor} 
-            className="pointer-events-none tracking-tight font-sans selection:bg-transparent"
+            fill={palette.text} 
+            className="pointer-events-none tracking-tight font-sans select-none"
           >
             {loteNum}
           </text>
+          {showPrice && lot && (
+            <text
+              x={x + w/2}
+              y={y + h/2 + 10}
+              textAnchor="middle"
+              fontSize="8"
+              fontWeight="600"
+              fill={palette.text}
+              opacity={0.75}
+              className="pointer-events-none font-sans select-none"
+            >
+              {formatShortMXN(lot.precio)}
+            </text>
+          )}
         </g>
       );
     };
@@ -259,13 +408,20 @@ const App = () => {
         if (stage === 2 && num === '26') continue;
         lots.push(renderLot(num, getX(80, 65), offsetY + 40 + i*40, 65, 35, stage));
       }
-      for(let i=0; i<4; i++) lots.push(renderLot((20-i).toString(), getX(85 + i*48, 42), offsetY + 280, 42, 60, stage));
+      // Fila 17-20 separada 18px de la columna 21-26 para que el 20 y el 21 no se lean como una sola pieza
+      for(let i=0; i<4; i++) lots.push(renderLot((20-i).toString(), getX(85 + i*48, 42), offsetY + 293, 42, 55, stage));
       for(let i=0; i<7; i++) lots.push(renderLot((10+i).toString(), getX(i*48, 45), offsetY + 400, 45, 65, stage));
+
+      const isActive = activeStage === stage;
+      const disp = allAvailable.filter(l => l.etapa === stage && l.estado === 'disponible').length;
+      const subtitle = disp === 0 ? 'Agotada' : disp <= 3 ? `Últimas ${disp} disponibles` : `${disp} disponibles`;
+      const titleX = mirrored ? offsetX - 160 : offsetX + 160;
       
       return (
-        <g key={`stage-group-${stage}`} style={{ opacity: activeStage === stage ? 1 : 0.25, transition: 'opacity 0.6s ease-in-out' }}>
-           <text x={mirrored ? offsetX - 160 : offsetX + 160} y={offsetY - 20} fontSize="48" fontWeight="700" fill="#475569" textAnchor="middle" className="font-serif italic tracking-wide">Etapa {stage}</text>
-           <path d={mirrored ? `M${offsetX - 10},${offsetY} L${offsetX - 10},${offsetY+450}` : `M${offsetX + 10},${offsetY} L${offsetX + 10},${offsetY+450}`} stroke="currentColor" strokeWidth="8" strokeDasharray="1 15" strokeLinecap="round" className="text-slate-200" opacity={activeStage === stage ? "0.8" : "0.3"} />
+        <g key={`stage-group-${stage}`}>
+           <text x={titleX} y={offsetY - 34} fontSize="48" fontWeight="700" fill="#475569" textAnchor="middle" opacity={isActive ? 1 : 0.35} className="font-serif italic tracking-wide" style={{ transition: 'opacity 0.6s ease-in-out' }}>Etapa {stage}</text>
+           <text x={titleX} y={offsetY - 12} fontSize="11" fontWeight="800" fill={disp > 0 && disp <= 3 ? '#059669' : '#64748b'} textAnchor="middle" className="uppercase tracking-[0.2em] font-sans">{subtitle}</text>
+           <path d={mirrored ? `M${offsetX - 10},${offsetY} L${offsetX - 10},${offsetY+450}` : `M${offsetX + 10},${offsetY} L${offsetX + 10},${offsetY+450}`} stroke="currentColor" strokeWidth="8" strokeDasharray="1 15" strokeLinecap="round" className="text-slate-200" opacity={isActive ? "0.8" : "0.3"} />
            {lots}
         </g>
       );
@@ -301,8 +457,8 @@ const App = () => {
               </div>
               
               <TransformComponent wrapperClass="!w-full !h-full" contentClass="!w-full !h-full flex items-center justify-center">
-                <div className="w-[1000px] lg:w-full h-full flex items-center justify-center lg:p-8">
-                  <svg viewBox="-50 0 1000 600" className="w-full h-auto text-slate-200 drop-shadow-sm cursor-grab active:cursor-grabbing max-h-[85vh]">
+                <div className="w-[1000px] lg:w-full h-full flex items-center justify-center pt-14 lg:p-8 lg:pt-16">
+                  <svg viewBox="-50 0 1000 600" preserveAspectRatio="xMidYMid meet" className="w-full h-full text-slate-200 drop-shadow-sm cursor-grab active:cursor-grabbing">
                     {renderStage(1, 100, 80, false)}
                     
                     {/* Center Amenities */}
@@ -340,16 +496,25 @@ const App = () => {
     const renderMiniLot = (loteNum: string, x: number, y: number, w: number, h: number, stage: number) => {
       const lotId = stage === 1 ? loteNum : `E2-${loteNum}`;
       const isSelected = selectedLotId === lotId;
-      return (
-        <rect 
-          key={`mini-${lotId}`}
-          x={x} y={y} width={w} height={h} 
-          fill={isSelected ? "#4f46e5" : "#94a3b8"} 
-          rx="4"
-          className={isSelected ? "animate-pulse drop-shadow-md origin-center" : ""}
-          style={isSelected ? { transformOrigin: `${x + w/2}px ${y + h/2}px`, transform: 'scale(2.5)', zIndex: 10 } : {}}
-        />
-      );
+      const lot = allAvailable.find(a => a.id === lotId);
+
+      if (isSelected) {
+        // Contorno con pulso: no tapa a los lotes vecinos
+        return (
+          <g key={`mini-${lotId}`}>
+            <rect x={x - 9} y={y - 9} width={w + 18} height={h + 18} rx="10" fill="none" stroke="#6366f1" strokeWidth="5" className="animate-pulse" />
+            <rect x={x} y={y} width={w} height={h} rx="4" fill={LOT_COLORS.seleccionado.fill} />
+          </g>
+        );
+      }
+
+      const fill = lot?.estado === 'apartada'
+        ? LOT_COLORS.apartada.fill
+        : lot?.estado === 'disponible'
+          ? LOT_COLORS.disponible.fill
+          : '#e2e8f0';
+
+      return <rect key={`mini-${lotId}`} x={x} y={y} width={w} height={h} fill={fill} rx="4" />;
     };
 
     const renderMiniStage = (stage: number, offsetX: number, offsetY: number, mirrored = false) => {
@@ -361,104 +526,158 @@ const App = () => {
         if (stage === 2 && num === '26') continue;
         lots.push(renderMiniLot(num, getX(80, 65), offsetY + 40 + i*40, 65, 35, stage));
       }
-      for(let i=0; i<4; i++) lots.push(renderMiniLot((20-i).toString(), getX(85 + i*48, 42), offsetY + 280, 42, 60, stage));
+      for(let i=0; i<4; i++) lots.push(renderMiniLot((20-i).toString(), getX(85 + i*48, 42), offsetY + 293, 42, 55, stage));
       for(let i=0; i<7; i++) lots.push(renderMiniLot((10+i).toString(), getX(i*48, 45), offsetY + 400, 45, 65, stage));
       return <g key={`mini-stage-${stage}`} style={{ opacity: selectedLot.etapa === stage ? 1 : 0.25, transition: 'opacity 0.6s ease-in-out' }}>{lots}</g>;
     };
 
+    const isApartada = selectedLot.estado === 'apartada';
+    const pricePerM2 = selectedLot.precio / selectedLot.m2c;
+    const creditFrom = monthlyPayment(selectedLot.precio, 0.2, 20);
+
     return (
       <div className="flex flex-col h-full bg-white relative">
-        {/* Decorative Top Accent */}
-        <div className="absolute top-0 right-0 w-[150%] h-64 bg-gradient-to-b from-slate-50 to-transparent -z-10 blur-xl"></div>
-        <div className="absolute top-0 right-0 p-8 opacity-5">
-           <Building2 size={120} />
-        </div>
-
-        <div className="p-6 md:p-10 flex-grow relative z-10 overflow-auto custom-scrollbar">
-          {/* Header */}
-          <div className="flex justify-between items-start mb-6">
-            <div className="pr-12">
-              <span className="inline-block px-3 py-1 bg-indigo-50 text-indigo-700 text-[10px] font-black uppercase tracking-widest rounded-full mb-3">
+        <div className="flex-grow relative overflow-auto custom-scrollbar">
+          {/* Hero con foto del desarrollo */}
+          <div className="relative h-40 md:h-44 overflow-hidden">
+            <img src="/hero-mallorca.jpg" alt="Mallorca Lifestyle, Metepec" className="w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-900/40 to-slate-900/10" />
+            <div className="absolute top-4 left-5 flex items-center gap-2">
+              <span className="px-3 py-1 bg-white/90 backdrop-blur text-slate-800 text-[10px] font-black uppercase tracking-widest rounded-full">
                 Etapa {selectedLot.etapa}
               </span>
-              <motion.h2 
-                initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} 
-                className="text-4xl md:text-5xl font-sans font-bold mb-2 text-slate-900 leading-none tracking-tight"
-              >
-                Lote {selectedLot.lote}
-              </motion.h2>
-              <div className="flex items-center gap-2 mt-3">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Prototipo {selectedLot.prototipo}</span>
-                {selectedLot.nota && <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest">{selectedLot.nota}</span>}
-              </div>
+              {isApartada ? (
+                <span className="px-3 py-1 bg-amber-300 text-amber-950 text-[10px] font-black uppercase tracking-widest rounded-full">Apartada</span>
+              ) : (
+                <span className="px-3 py-1 bg-emerald-300 text-emerald-950 text-[10px] font-black uppercase tracking-widest rounded-full">Disponible</span>
+              )}
             </div>
-            {!isMobile && (
-              <button 
-                onClick={() => setSelectedLotId(null)} 
-                className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 rounded-full transition-colors flex-shrink-0"
+            <div className="absolute top-4 right-4 flex items-center gap-1.5">
+              <button
+                onClick={() => {
+                  const url = `${window.location.origin}/?lote=${encodeURIComponent(selectedLot.id)}`;
+                  navigator.clipboard?.writeText(url).then(() => {
+                    setLinkCopied(true);
+                    setTimeout(() => setLinkCopied(false), 1800);
+                  });
+                }}
+                aria-label="Copiar enlace de este lote"
+                title="Copiar enlace de este lote"
+                className={`h-9 px-3 flex items-center gap-1.5 rounded-full transition-colors shadow text-[10px] font-black uppercase tracking-widest ${linkCopied ? 'bg-emerald-400 text-emerald-950' : 'bg-white/90 hover:bg-white text-slate-700'}`}
               >
-                <X size={18} />
+                {linkCopied ? <Check size={14} /> : <Link2 size={14} />}
+                {linkCopied ? 'Copiado' : 'Enlace'}
               </button>
+              {lotNavList.length > 1 && (
+                <>
+                  <button
+                    onClick={() => goToAdjacentLot(-1)}
+                    aria-label="Lote anterior"
+                    title="Lote anterior (←)"
+                    className="w-9 h-9 flex items-center justify-center text-slate-700 bg-white/90 hover:bg-white rounded-full transition-colors shadow"
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+                  <button
+                    onClick={() => goToAdjacentLot(1)}
+                    aria-label="Lote siguiente"
+                    title="Lote siguiente (→)"
+                    className="w-9 h-9 flex items-center justify-center text-slate-700 bg-white/90 hover:bg-white rounded-full transition-colors shadow"
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                </>
+              )}
+              {!isMobile && (
+                <button 
+                  onClick={() => setSelectedLotId(null)} 
+                  aria-label="Cerrar detalle"
+                  title="Cerrar (Esc)"
+                  className="w-9 h-9 flex items-center justify-center text-slate-700 bg-white/90 hover:bg-white rounded-full transition-colors shadow"
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+            <div className="absolute bottom-4 left-5 right-5 flex items-end justify-between gap-3">
+              <div>
+                <motion.h2 
+                  key={selectedLot.id}
+                  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} 
+                  className="text-4xl md:text-[2.75rem] font-bold text-white leading-none tracking-tight whitespace-nowrap"
+                >
+                  <span className="text-base font-semibold text-white/60 mr-2 align-middle">Lote</span>{selectedLot.lote}
+                </motion.h2>
+                <span className="text-[11px] font-bold text-white/80 uppercase tracking-[0.25em] mt-2 block">Modelo {toTitle(selectedLot.prototipo)}</span>
+              </div>
+              {selectedLot.nota && !isApartada && (
+                <span className="bg-white/15 backdrop-blur border border-white/25 text-white px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest whitespace-nowrap">{selectedLot.nota}</span>
+              )}
+            </div>
+          </div>
+
+          <div className="p-6 md:p-8">
+          {/* Precio y opciones clave */}
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 mb-5 shadow-sm">
+            <span className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">
+              {isApartada ? 'Valor de lista (referencia)' : 'Precio de lista'}
+            </span>
+            <div className="flex items-baseline justify-between gap-3 flex-wrap">
+              <span className="text-3xl font-bold text-slate-900 tracking-tight">{formatter.format(selectedLot.precio)}</span>
+              <span className="text-[11px] font-semibold text-slate-500">{formatter.format(pricePerM2)} / m² const.</span>
+            </div>
+
+            {isApartada ? (
+              <div className="mt-4 bg-amber-50 border border-amber-200 rounded-2xl p-4">
+                <div className="flex items-center gap-2 text-amber-900 font-black text-xs uppercase tracking-wider mb-1">
+                  <Tag size={14} className="text-amber-600" /> Propiedad con Apartado Vigente
+                </div>
+                <p className="text-xs text-amber-800 leading-relaxed font-medium">
+                  Este lote cuenta con un apartado activo. Puedes registrarte en la lista de espera prioritaria con tu asesor en caso de que quede disponible.
+                </p>
+              </div>
+            ) : (
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-3">
+                  <span className="block text-[9px] font-black uppercase tracking-widest text-emerald-700 mb-1">Contado −7%</span>
+                  <span className="block text-lg font-bold text-emerald-900 leading-tight">{formatter.format(selectedLot.precio * 0.93)}</span>
+                  <span className="block text-[10px] font-medium text-emerald-700 mt-0.5">Ahorras {formatter.format(selectedLot.precio * 0.07)}</span>
+                </div>
+                <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-3">
+                  <span className="block text-[9px] font-black uppercase tracking-widest text-indigo-700 mb-1">Crédito desde</span>
+                  <span className="block text-lg font-bold text-indigo-900 leading-tight">
+                    {formatter.format(creditFrom)}<span className="text-xs font-semibold text-indigo-500">/mes</span>
+                  </span>
+                  <span className="block text-[10px] font-medium text-indigo-700 mt-0.5">20% enganche · 20 años*</span>
+                </div>
+              </div>
             )}
           </div>
 
-          {/* Location Minimap */}
-          <div className="w-full bg-slate-50/80 rounded-[1.5rem] border border-slate-100 p-4 mb-8 flex flex-col relative overflow-hidden shadow-inner">
-             <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5 mb-3 z-10 relative">
-               <MapIcon size={14} className="text-indigo-500" /> Ubicación en el Master Plan
-             </div>
-             
-             {/* Map Container */}
-             <div className="relative w-full h-40 lg:h-48 flex items-center justify-center rounded-xl overflow-hidden bg-white/50 border border-slate-100">
-               {/* Unified Viewport for complete context */}
-               <svg 
-                 viewBox={selectedLot.etapa === 1 ? "90 60 360 500" : "450 60 360 500"} 
-                 className="w-full h-full stroke-slate-200 drop-shadow-sm transition-all duration-700 ease-in-out"
-               >
-                  {renderMiniStage(1, 100, 80, false)}
-                  <path d="M110,80 L110,530" stroke="currentColor" strokeWidth="8" strokeDasharray="1 15" strokeLinecap="round" className="text-slate-200" opacity="0.6" />
-                  
-                  <g transform="translate(450, 280)">
-                    <rect x="-70" y="-50" width="140" height="100" rx="16" fill="#ffffff" />
-                  </g>
-
-                  {renderMiniStage(2, 800, 80, true)}
-                  <path d="M790,80 L790,530" stroke="currentColor" strokeWidth="8" strokeDasharray="1 15" strokeLinecap="round" className="text-slate-200" opacity="0.6" />
-               </svg>
-               
-               {/* Fade Gradients for smooth edges */}
-               <div className="absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-slate-50/80 to-transparent pointer-events-none"></div>
-               <div className="absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-slate-50/80 to-transparent pointer-events-none"></div>
-             </div>
-          </div>
-
-          {/* Pricing Banner */}
-          <div className="bg-slate-900 text-white rounded-[2rem] p-6 mb-8 flex items-center justify-between shadow-xl relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 mix-blend-overlay"></div>
-            <div className="relative z-10">
-              <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mb-1">Inversión Base</span>
-              <span className="text-3xl font-light tracking-tight">{formatter.format(selectedLot.precio)}</span>
-            </div>
-            <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-md relative z-10">
-              <CreditCard className="text-indigo-200" size={24} />
-            </div>
-          </div>
-
           {/* Specs */}
-          <div className="grid grid-cols-2 gap-3 mb-8">
-            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex flex-col">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Área de Terreno</span>
-              <span className="text-xl font-sans font-bold text-slate-800">{selectedLot.m2t} <span className="text-sm font-normal text-slate-400">m²</span></span>
+          <div className="grid grid-cols-3 gap-2 mb-6">
+            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 flex flex-col">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Terreno</span>
+              <span className="text-lg font-bold text-slate-800 leading-tight">{selectedLot.m2t} <span className="text-xs font-normal text-slate-400">m²</span></span>
+              <span className="text-[10px] text-slate-500 mt-1 font-medium leading-snug">
+                {selectedLot.m2Exc ? `Base 180 + ${selectedLot.m2Exc} exc.` : 'Sin excedente'}
+              </span>
             </div>
-            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex flex-col">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Área Construida</span>
-              <span className="text-xl font-sans font-bold text-slate-800">{selectedLot.m2c} <span className="text-sm font-normal text-slate-400">m²</span></span>
+            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 flex flex-col">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Construcción</span>
+              <span className="text-lg font-bold text-slate-800 leading-tight">{selectedLot.m2c} <span className="text-xs font-normal text-slate-400">m²</span></span>
+              <span className="text-[10px] text-slate-500 mt-1 font-medium leading-snug">{toTitle(selectedLot.prototipo)}</span>
+            </div>
+            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 flex flex-col">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Casa Club</span>
+              <span className="text-lg font-bold text-slate-800 leading-tight">{formatter.format(selectedLot.club)}</span>
+              <span className="text-[10px] text-slate-500 mt-1 font-medium leading-snug">Equipamiento</span>
             </div>
           </div>
 
           {/* Downpayment Engine */}
           <div className="mb-6">
-            <p className="text-[10px] font-black text-slate-800 uppercase tracking-widest mb-3">Esquema de Financiamiento</p>
+            <p className="text-[10px] font-black text-slate-800 uppercase tracking-widest mb-3">Esquema de Financiamiento Bancario</p>
             <div className="flex bg-slate-100 p-1 rounded-2xl w-full mb-5 relative z-0 shadow-inner">
               {[10, 20, 30].map(pct => (
                 <button 
@@ -512,33 +731,117 @@ const App = () => {
             )}
           </div>
 
-          {/* Cash Offer */}
-          <div className="flex items-start gap-4 p-5 bg-emerald-50 rounded-3xl border border-emerald-100/80">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2">
-                 <Tag size={14} className="text-emerald-500" />
-                 <span className="text-[10px] font-black text-emerald-800 uppercase tracking-widest">Incentivo Pago de Contado</span>
+          {/* Políticas Oficiales de Descuentos (Vigencia 31 de Julio 2026) */}
+          <div className="mb-6 bg-slate-50 border border-slate-200/80 rounded-3xl p-5">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Tag size={15} className="text-indigo-600" />
+                <span className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Políticas de Descuentos</span>
               </div>
-              <p className="text-xs text-emerald-700 font-medium leading-relaxed mb-3">Ahorra <strong className="text-emerald-900">{formatter.format(selectedLot.precio * 0.07)}</strong> en liquidación inmediata (7% de descuento).</p>
-              <div className="flex items-end justify-between bg-white/60 p-3 rounded-xl">
-                <span className="text-[9px] text-emerald-600 font-black uppercase tracking-widest">Precio Final</span>
-                <span className="text-lg font-black text-emerald-900">{formatter.format(selectedLot.precio * 0.93)}</span>
+              <span className="text-[9px] font-bold text-slate-400 uppercase">31 Jul 2026</span>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              {/* Contado */}
+              <div className="bg-white rounded-2xl p-3.5 border border-emerald-100 shadow-sm flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-black text-slate-900">Contado (1 sola exhibición)</span>
+                    <span className="bg-emerald-100 text-emerald-800 font-black text-[9px] px-2 py-0.5 rounded-full uppercase tracking-wider">7% OFF</span>
+                  </div>
+                  <span className="text-[10px] text-emerald-700 font-medium">Ahorras {formatter.format(selectedLot.precio * 0.07)}</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-sm font-black text-emerald-900">{formatter.format(selectedLot.precio * 0.93)}</span>
+                </div>
+              </div>
+
+              {/* Crédito Preventa */}
+              <div className="bg-white rounded-2xl p-3.5 border border-slate-100 shadow-sm flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-800">Crédito Preventa (Plan Crédito)</span>
+                    <span className="bg-indigo-100 text-indigo-800 font-black text-[9px] px-2 py-0.5 rounded-full uppercase tracking-wider">5% OFF</span>
+                  </div>
+                  <span className="text-[10px] text-indigo-600 font-medium">Ahorras {formatter.format(selectedLot.precio * 0.05)}</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-sm font-black text-slate-900">{formatter.format(selectedLot.precio * 0.95)}</span>
+                </div>
+              </div>
+
+              {/* Comercial */}
+              <div className="bg-white rounded-2xl p-3.5 border border-slate-100 shadow-sm flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-800">Comercial (3 Mensualidades)</span>
+                    <span className="bg-indigo-100 text-indigo-800 font-black text-[9px] px-2 py-0.5 rounded-full uppercase tracking-wider">5% OFF</span>
+                  </div>
+                  <span className="text-[10px] text-indigo-600 font-medium">Ahorras {formatter.format(selectedLot.precio * 0.05)}</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-sm font-black text-slate-900">{formatter.format(selectedLot.precio * 0.95)}</span>
+                </div>
+              </div>
+
+              {/* Tradicional */}
+              <div className="bg-white rounded-2xl p-3.5 border border-slate-100 shadow-sm flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-slate-800">Tradicional (20% Contrato / 80% Escritura)</span>
+                  <span className="text-[10px] text-slate-400 block">Precio de Lista estándar</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-sm font-black text-slate-900">{formatter.format(selectedLot.precio)}</span>
+                </div>
               </div>
             </div>
+
+            <div className="mt-3 pt-3 border-t border-slate-200/60 flex items-center justify-between text-[11px]">
+              <span className="text-slate-500 font-medium">Cuota Equipamiento Casa Club:</span>
+              <span className="font-bold text-slate-900">{formatter.format(selectedLot.club)}</span>
+            </div>
+          </div>
+
+          {/* Location Minimap */}
+          <div className="w-full bg-slate-50/80 rounded-[1.5rem] border border-slate-100 p-4 mb-2 flex flex-col relative overflow-hidden">
+             <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5 mb-3 z-10 relative">
+               <MapIcon size={14} className="text-indigo-500" /> Ubicación en el Master Plan
+             </div>
+             <div className="relative w-full h-40 lg:h-44 flex items-center justify-center rounded-xl overflow-hidden bg-white/60 border border-slate-100">
+               <svg 
+                 viewBox={selectedLot.etapa === 1 ? "90 60 360 500" : "450 60 360 500"} 
+                 className="w-full h-full stroke-slate-200 transition-all duration-700 ease-in-out"
+               >
+                  {renderMiniStage(1, 100, 80, false)}
+                  <path d="M110,80 L110,530" stroke="currentColor" strokeWidth="8" strokeDasharray="1 15" strokeLinecap="round" className="text-slate-200" opacity="0.6" />
+                  <g transform="translate(450, 280)">
+                    <rect x="-70" y="-50" width="140" height="100" rx="16" fill="#ffffff" />
+                  </g>
+                  {renderMiniStage(2, 800, 80, true)}
+                  <path d="M790,80 L790,530" stroke="currentColor" strokeWidth="8" strokeDasharray="1 15" strokeLinecap="round" className="text-slate-200" opacity="0.6" />
+               </svg>
+               <div className="absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-slate-50/80 to-transparent pointer-events-none"></div>
+               <div className="absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-slate-50/80 to-transparent pointer-events-none"></div>
+             </div>
+          </div>
           </div>
         </div>
 
         {/* Footer actions */}
-        <div className="p-6 md:p-8 bg-white border-t border-slate-100 flex items-center justify-between z-10">
+        <div className="p-5 md:p-6 bg-white border-t border-slate-100 flex items-center justify-between gap-4 z-10">
           <div className="flex flex-col">
-            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Siguiente Paso</span>
-             <span className="text-xs font-medium text-slate-600">Generar Cotización PDF</span>
+            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+              {selectedLot.estado === 'apartada' ? 'Estado: Apartada' : 'De contado (−7%)'}
+            </span>
+            <span className="text-base font-bold text-slate-900 tracking-tight">
+              {selectedLot.estado === 'apartada' ? 'Cotización informativa' : formatter.format(selectedLot.precio * 0.93)}
+            </span>
           </div>
           <button 
             onClick={() => { setShowQuoteModal(true); setClientName(''); setAgentName(''); setAgentPhone(''); setAgentEmail(''); setGeneratedPdfUrl(null); }}
-            className="px-8 py-4 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] transition-all flex items-center gap-3 min-w-[150px] justify-center bg-slate-900 text-white hover:bg-indigo-600 hover:shadow-xl hover:shadow-indigo-600/20"
+            className={`px-8 py-4 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] transition-all flex items-center gap-3 min-w-[150px] justify-center text-white ${selectedLot.estado === 'apartada' ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-600/20' : 'bg-slate-900 hover:bg-indigo-600 shadow-indigo-600/20'} hover:shadow-xl`}
           >
-            Cotizar <ArrowRight size={14} />
+            {selectedLot.estado === 'apartada' ? 'Consultar / Cotizar' : 'Cotizar'} <ArrowRight size={14} />
           </button>
         </div>
       </div>
@@ -641,37 +944,37 @@ const App = () => {
     // Lot info section
     doc.setDrawColor(226, 232, 240);
     doc.setFillColor(248, 250, 252);
-    doc.roundedRect(15, y, w - 30, 40, 3, 3, 'FD');
-    doc.setFontSize(20);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(30, 41, 59);
-    doc.text(`Lote ${lot.lote}`, 22, y + 12);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(100, 116, 139);
-    doc.text(`Etapa ${lot.etapa}  ·  Prototipo ${lot.prototipo}`, 22, y + 20);
-    doc.text(`Terreno: ${lot.m2t} m²  ·  Construcción: ${lot.m2c} m²`, 22, y + 27);
-    // Price on right
+    doc.roundedRect(15, y, w - 30, 36, 3, 3, 'FD');
     doc.setFontSize(18);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(30, 41, 59);
-    doc.text(fmt(lot.precio), w - 15, y + 14, { align: 'right' });
-    doc.setFontSize(8);
+    doc.text(`Lote ${lot.lote} ${lot.estado === 'apartada' ? '(APARTADA)' : ''}`, 22, y + 11);
+    doc.setFontSize(8.5);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 116, 139);
-    doc.text('PRECIO TOTAL', w - 15, y + 21, { align: 'right' });
-    doc.text('PRECIO TOTAL', w - 15, y + 21, { align: 'right' });
-    y += 44;
+    doc.text(`Etapa ${lot.etapa}  ·  Prototipo ${lot.prototipo}  ·  Lista: 31 Julio 2026`, 22, y + 18);
+    const terrText = lot.m2Exc ? `Terreno: ${lot.m2t} m² (Base 180 m² + ${lot.m2Exc} m² exc)  ·  Construcción: ${lot.m2c} m²` : `Terreno: ${lot.m2t} m²  ·  Construcción: ${lot.m2c} m²`;
+    doc.text(terrText, 22, y + 25);
+    // Price on right
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 41, 59);
+    doc.text(fmt(lot.precio), w - 20, y + 13, { align: 'right' });
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text(lot.estado === 'apartada' ? 'VALOR DE LISTA (APARTADA)' : 'PRECIO DE LISTA', w - 20, y + 20, { align: 'right' });
+    y += 40;
 
     // House Model Features
     const matchKey = lot.prototipo ? Object.keys(MODEL_FEATURES_TEXT).find(k => k.toUpperCase() === lot.prototipo!.toUpperCase()) : null;
     if (matchKey) {
-      doc.setFontSize(11);
+      doc.setFontSize(10);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(30, 41, 59);
       doc.text(`Características del Modelo ${matchKey}`, 15, y);
-      y += 6;
-      doc.setFontSize(8);
+      y += 5;
+      doc.setFontSize(7.5);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(71, 85, 105);
       const features = MODEL_FEATURES_TEXT[matchKey];
@@ -679,37 +982,64 @@ const App = () => {
         const cx = i % 2 === 0 ? 15 : w / 2;
         doc.circle(cx + 2, y - 1, 0.8, 'F');
         doc.text(feat, cx + 5, y);
-        if (i % 2 !== 0) y += 5.5;
+        if (i % 2 !== 0) y += 5;
       });
-      if (features.length % 2 !== 0) y += 5.5;
+      if (features.length % 2 !== 0) y += 5;
     }
     
+    y += 3;
+
+    // 1. Políticas Oficiales de Descuentos (Official Policy Table)
+    doc.setFontSize(9.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 41, 59);
+    doc.text('Políticas Oficiales de Descuentos', 15, y);
+    y += 4.5;
+
+    doc.setFillColor(15, 23, 42);
+    doc.rect(15, y, w - 30, 6, 'F');
+    doc.setFontSize(6.5);
+    doc.setTextColor(255, 255, 255);
+    doc.text('Esquema', 18, y + 4);
+    doc.text('Condición', 52, y + 4);
+    doc.text('Descuento', 112, y + 4);
+    doc.text('Precio Final', 152, y + 4);
+    y += 6;
+
+    const discountRows = [
+      ['Contado', '100% pago en una sola exhibición', '7% (-' + fmt(lot.precio * 0.07) + ')', fmt(lot.precio * 0.93)],
+      ['Crédito Preventa', 'Plan del crédito bancario', '5% (-' + fmt(lot.precio * 0.05) + ')', fmt(lot.precio * 0.95)],
+      ['Comercial', '3 mensualidades directas', '5% (-' + fmt(lot.precio * 0.05) + ')', fmt(lot.precio * 0.95)],
+      ['Tradicional', '20% contrato / 80% escritura', 'Lista de Precio', fmt(lot.precio)],
+    ];
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+    for (let r = 0; r < discountRows.length; r++) {
+      if (r % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(15, y, w - 30, 5, 'F'); }
+      doc.setTextColor(30, 41, 59);
+      doc.text(discountRows[r][0], 18, y + 3.5);
+      doc.text(discountRows[r][1], 52, y + 3.5);
+      doc.text(discountRows[r][2], 112, y + 3.5);
+      doc.text(discountRows[r][3], 152, y + 3.5);
+      y += 5;
+    }
+
     y += 4;
 
-    // Side-by-side Financials Tables
-    const startY = y;
-    
-    // LEFT TABLE: Enganches
-    doc.setFontSize(10);
+    // 2. Opciones de Enganche (Esquema Tradicional)
+    doc.setFontSize(9.5);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(30, 41, 59);
-    doc.text('Opciones de Enganche', 15, y);
-    
-    // Full width Financials
-    
-    // 1. Opciones de Enganche (Highly Relevant)
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(30, 41, 59);
-    doc.text('Opciones de Enganche', 15, y);
-    y += 5;
+    doc.text('Opciones de Enganche (Esquema Tradicional)', 15, y);
+    y += 4.5;
     
     doc.setFillColor(15, 23, 42);
-    doc.rect(15, y, w - 30, 7, 'F');
-    doc.setFontSize(7);
+    doc.rect(15, y, w - 30, 6, 'F');
+    doc.setFontSize(6.5);
     doc.setTextColor(255, 255, 255);
-    ['Enganche', 'Capital Requerido', 'Monto a Financiar'].forEach((h, i) => doc.text(h, 17 + i * 55, y + 4.5));
-    y += 7;
+    ['Enganche', 'Capital Requerido', 'Monto a Financiar'].forEach((h, i) => doc.text(h, 18 + i * 55, y + 4));
+    y += 6;
     
     const dpData = [
       ['20%', fmt(lot.precio * 0.2), fmt(principal20)],
@@ -718,28 +1048,29 @@ const App = () => {
     ];
 
     doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
     for (let r = 0; r < 3; r++) {
-      if (r % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(15, y, w - 30, 6, 'F'); }
+      if (r % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(15, y, w - 30, 5, 'F'); }
       doc.setTextColor(30, 41, 59);
-      dpData[r].forEach((cell, ci) => doc.text(cell, 17 + ci * 55, y + 4));
-      y += 6;
+      dpData[r].forEach((cell, ci) => doc.text(cell, 18 + ci * 55, y + 3.5));
+      y += 5;
     }
     
-    y += 6;
+    y += 4;
 
-    // 2. Mensualidades Estimadas (De-emphasized)
+    // 3. Mensualidades Estimadas (Informativo)
     doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(116, 145, 171); // Slate-400 equivalent but legible
-    doc.text('Mensualidades Estimadas (Tasa 11% - Informativo)', 15, y);
+    doc.setTextColor(116, 145, 171);
+    doc.text('Mensualidades Estimadas (Tasa Anual 11% - Informativo)', 15, y);
     y += 4;
     
     doc.setFillColor(241, 245, 249);
-    doc.rect(15, y, w - 30, 6, 'F');
-    doc.setFontSize(6.5);
-    doc.setTextColor(148, 163, 184); // Lighter
-    ['Enganche', '10 Años', '15 Años', '20 Años'].forEach((h, i) => doc.text(h, 17 + i * 45, y + 4));
-    y += 6;
+    doc.rect(15, y, w - 30, 5.5, 'F');
+    doc.setFontSize(6);
+    doc.setTextColor(148, 163, 184);
+    ['Enganche', '10 Años', '15 Años', '20 Años'].forEach((h, i) => doc.text(h, 18 + i * 45, y + 3.8));
+    y += 5.5;
     
     const mData = [
       ['20%', fmt(calc(principal20, 120)), fmt(calc(principal20, 180)), fmt(calc(principal20, 240))],
@@ -750,23 +1081,16 @@ const App = () => {
     doc.setFont('helvetica', 'normal');
     for (let r = 0; r < 3; r++) {
       doc.setTextColor(148, 163, 184);
-      mData[r].forEach((cell, ci) => doc.text(cell, 17 + ci * 45, y + 4));
-      y += 5;
+      mData[r].forEach((cell, ci) => doc.text(cell, 18 + ci * 45, y + 3.5));
+      y += 4.5;
     }
     y += 2;
 
-    // Disclaimer
-    doc.setFontSize(6);
-    doc.setTextColor(148, 163, 184);
-    doc.text('* Remitirse a su banco para una proyección oficial.', 15, y);
-    
-    y += 10;
-
     // Bottom extra info
     doc.setFontSize(6.5);
-    doc.setTextColor(148, 163, 184);
-    doc.text(`Club de Casa: ${fmt(lot.club)} (no incluido en precios mostrados).`, 15, y);
-    doc.text('Esta cotización es informativa y no representa un compromiso de venta. Precios sujetos a cambio sin previo aviso.', 15, y + 4);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Cuota Equipamiento Casa Club: ${fmt(lot.club)} (no incluida en el precio de lista).`, 15, y);
+    doc.text('Precios y políticas conforme a la lista oficial vigente del 31 de Julio del 2026. Sujetos a cambios sin previo aviso.', 15, y + 4);
 
     // Footer
     doc.setFillColor(15, 23, 42);
@@ -800,13 +1124,19 @@ const App = () => {
     const text = [
       `🏡 *Mallorca Lifestyle — Metepec*`,
       ``,
-      `📋 *Cotización Lote ${lot.lote}*`,
+      `📋 *Cotización Lote ${lot.lote}* ${lot.estado === 'apartada' ? '(APARTADA)' : ''}`,
       `Etapa ${lot.etapa} · Prototipo ${lot.prototipo}`,
-      `Terreno: ${lot.m2t} m² · Construcción: ${lot.m2c} m²`,
+      `Terreno: ${lot.m2t} m² ${lot.m2Exc ? `(Base 180 m² + ${lot.m2Exc} m² exc)` : ''} · Construcción: ${lot.m2c} m²`,
       ``,
-      `💰 *Precio: ${formatter.format(lot.precio)}*`,
-      `🏦 Enganche 20%: ${formatter.format(lot.precio * 0.2)}`,
+      `💰 *Precio de Lista: ${formatter.format(lot.precio)}*`,
+      `✨ *Pago de Contado (7% dto): ${formatter.format(lot.precio * 0.93)}*`,
+      `🏦 *Crédito Preventa / Comercial (5% dto): ${formatter.format(lot.precio * 0.95)}*`,
+      `🏦 Enganche Tradicional 20%: ${formatter.format(lot.precio * 0.2)}`,
+      `🏊 Equipamiento Casa Club: ${formatter.format(lot.club)}`,
       ``,
+      `📅 *Lista oficial vigente:* 31 de Julio del 2026`,
+      ``,
+      `🔗 *Ver este lote en línea:* ${window.location.origin}/?lote=${encodeURIComponent(lot.id)}`,
       `📖 *Conoce el desarrollo (Brochure):* ${window.location.origin}/Brochure_Mallorca_1.pdf`
     ].join('\n');
 
@@ -852,12 +1182,18 @@ const App = () => {
               <button onClick={() => setActiveTab('modelos')} className={`flex-1 px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.1em] transition-all ${activeTab === 'modelos' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}>Modelos</button>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-nowrap sm:flex-wrap items-center gap-2 overflow-x-auto sm:overflow-visible -mx-6 px-6 sm:mx-0 sm:px-0 pb-1 sm:pb-0 [scrollbar-width:none] [&>*]:shrink-0 [&>*]:whitespace-nowrap">
               <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-widest border border-slate-200">
                 51 Casas en Total
               </span>
               <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-widest border border-emerald-100">
-                {allAvailable.length} Disponibles (Etapa 1 y 2)
+                {allAvailable.filter(l => l.estado === 'disponible').length} Disponibles
+              </span>
+              <span className="bg-amber-50 text-amber-800 text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-widest border border-amber-200">
+                {allAvailable.filter(l => l.estado === 'apartada').length} Apartadas
+              </span>
+              <span className="bg-slate-100 text-slate-700 text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-widest border border-slate-200">
+                Lista: 31 Jul 2026
               </span>
               <a href="/Brochure_Mallorca_1.pdf" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-widest border border-indigo-100 hover:bg-indigo-100 transition-colors">
                 <FileText size={12} /> Ver Brochure
@@ -976,34 +1312,75 @@ const App = () => {
           )}
           
           {/* Status Bar */}
-          <div className="flex flex-row gap-4 mb-2">
-            <div className="bg-white p-4 lg:p-6 rounded-3xl shadow-sm border border-slate-100 flex-1 flex flex-col justify-center">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Disponibilidad</p>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl lg:text-4xl font-bold text-slate-900 leading-none">{filteredData.length}</span>
-                <span className="text-[9px] font-bold tracking-widest uppercase text-emerald-600 bg-emerald-50 px-2 rounded-sm hidden lg:inline">Lotes</span>
+          {(() => {
+            const stageLots = allAvailable.filter(l => l.etapa === activeStage);
+            const stageTotal = STAGE_TOTALS[activeStage];
+            const disp = stageLots.filter(l => l.estado === 'disponible');
+            const apart = stageLots.filter(l => l.estado === 'apartada').length;
+            const sold = stageTotal - stageLots.length;
+            const soldPct = Math.round((sold / stageTotal) * 100);
+            const dispFiltered = disp.filter(d => filterPrototype === 'Todos' || d.prototipo === filterPrototype);
+            const minPrice = dispFiltered.length ? Math.min(...dispFiltered.map(d => d.precio)) : 0;
+            const minM2 = dispFiltered.length ? Math.min(...dispFiltered.map(d => d.precio / d.m2c)) : 0;
+            const filterLabel = filterPrototype !== 'Todos' ? ` · ${toTitle(filterPrototype)}` : '';
+            return (
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-4 mb-2">
+                <div className="col-span-2 lg:col-span-1 bg-white p-4 lg:p-5 rounded-3xl shadow-sm border border-slate-100 flex flex-col justify-center">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Disponibilidad · Etapa {activeStage}</p>
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <span className="text-3xl lg:text-4xl font-bold text-slate-900 leading-none">{disp.length}</span>
+                    <span className="text-xs font-semibold text-slate-400">de {stageTotal}</span>
+                    {apart > 0 && (
+                      <span className="text-[9px] font-bold tracking-widest uppercase text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                        {apart} apartadas
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden flex" aria-hidden="true">
+                    <div className="bg-slate-400" style={{ width: `${(sold / stageTotal) * 100}%` }} />
+                    <div className="bg-amber-300" style={{ width: `${(apart / stageTotal) * 100}%` }} />
+                    <div className="bg-emerald-300" style={{ width: `${(disp.length / stageTotal) * 100}%` }} />
+                  </div>
+                  <p className="text-[10px] font-semibold text-slate-500 mt-1.5">{soldPct}% vendido · {sold} de {stageTotal} casas</p>
+                </div>
+                <div className="bg-white p-4 lg:p-5 rounded-3xl shadow-sm border border-slate-100 flex flex-col justify-center">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Precios desde{filterLabel}</p>
+                  <span className="text-xl lg:text-2xl font-bold text-slate-900 leading-none">{formatter.format(minPrice)}</span>
+                  <p className="text-[10px] font-semibold text-emerald-700 mt-1.5">Contado {formatter.format(minPrice * 0.93)}</p>
+                </div>
+                <div className="bg-white p-4 lg:p-5 rounded-3xl shadow-sm border border-slate-100 flex flex-col justify-center">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Precio m² desde{filterLabel}</p>
+                  <span className="text-xl lg:text-2xl font-bold text-slate-900 leading-none">{formatter.format(minM2)}</span>
+                  <p className="text-[10px] font-semibold text-slate-500 mt-1.5">Sobre m² de construcción</p>
+                </div>
               </div>
-            </div>
-            <div className="bg-white p-4 lg:p-6 rounded-3xl shadow-sm border border-slate-100 flex-1 flex flex-col justify-center">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Precios Desde</p>
-              <div className="flex items-baseline gap-1">
-                <span className="text-2xl lg:text-3xl font-bold text-slate-900 leading-none">
-                  {filteredData.length > 0 ? formatter.format(Math.min(...filteredData.map(d => d.precio))) : formatter.format(0)}
-                </span>
-              </div>
-            </div>
-          </div>
+            );
+          })()}
 
           {/* Primary View */}
           <div className={`flex-grow bg-white rounded-[2rem] lg:rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden relative ${viewMode === 'map' || !isMobile ? 'min-h-[500px]' : ''}`}>
              
              {viewMode === 'map' ? (
                 <div className="absolute inset-0">
-                  <MasterPlan />
+                  {renderMasterPlan()}
+                  {/* Filtro por modelo directo en el mapa */}
+                  <div className="absolute top-4 left-4 z-10 flex gap-1 bg-white/95 backdrop-blur-sm border border-slate-200 p-1 rounded-full shadow-lg max-w-[calc(100%-5rem)] overflow-x-auto [scrollbar-width:none]">
+                    {prototypes.map(p => (
+                      <button
+                        key={`map-filter-${p}`}
+                        onClick={() => setFilterPrototype(p)}
+                        className={`px-3.5 py-1.5 rounded-full text-[9px] font-black uppercase tracking-wider whitespace-nowrap transition-colors ${filterPrototype === p ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-900'}`}
+                      >
+                        {p === 'Todos' ? 'Todos' : toTitle(p)}
+                      </button>
+                    ))}
+                  </div>
                   <div className="absolute bottom-6 left-6 z-10 flex flex-col gap-2 pointer-events-none">
                     <div className="bg-white/95 backdrop-blur-sm border border-slate-200 px-4 py-2 rounded-2xl shadow-lg flex items-center gap-4">
-                      <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-emerald-300"></span><span className="text-[9px] font-bold uppercase tracking-widest text-slate-600">Disponible</span></div>
-                      <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-slate-200"></span><span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Vendido</span></div>
+                      <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full" style={{ background: LOT_COLORS.disponible.fill }}></span><span className="text-[9px] font-bold uppercase tracking-widest text-slate-600">Disponible</span></div>
+                      <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full" style={{ background: LOT_COLORS.apartada.fill }}></span><span className="text-[9px] font-bold uppercase tracking-widest text-slate-600">Apartada</span></div>
+                      <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full border border-slate-200" style={{ background: LOT_COLORS.vendida.fill }}></span><span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Vendido</span></div>
+                      <span className="hidden lg:inline text-[10px] text-slate-400 font-medium pl-4 border-l border-slate-200">Haz clic en un lote para ver detalle</span>
                     </div>
                   </div>
                   {isMobile && (
@@ -1039,18 +1416,35 @@ const App = () => {
                         <div 
                           key={item.id} 
                           onClick={() => setSelectedLotId(item.id)}
+                          tabIndex={0}
+                          role="button"
+                          aria-label={`Ver lote ${item.lote}`}
+                          data-lot-card
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedLotId(item.id); } }}
                           className={`bg-white p-5 rounded-2xl border transition-all ${selectedLotId === item.id ? 'border-indigo-500 shadow-md ring-2 ring-indigo-500/20' : 'border-slate-200 shadow-sm'}`}
                         >
                           <div className="flex justify-between items-start mb-4">
                             <div>
-                              <h3 className="font-sans font-bold text-2xl text-slate-900">Lote {item.lote}</h3>
+                              <div className="flex items-center gap-2 mb-1">
+                                <h3 className="font-sans font-bold text-2xl text-slate-900">Lote {item.lote}</h3>
+                                {item.estado === 'apartada' ? (
+                                  <span className="bg-amber-100 text-amber-900 border border-amber-300 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">Apartada</span>
+                                ) : (
+                                  <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">Disponible</span>
+                                )}
+                              </div>
                               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{item.prototipo}</p>
                             </div>
-                            <span className="text-lg font-light tracking-tight">{formatter.format(item.precio)}</span>
+                            <div className="text-right">
+                              <span className="text-lg font-light tracking-tight block">{formatter.format(item.precio)}</span>
+                              {item.estado === 'apartada' && (
+                                <span className="text-[9px] text-amber-700 font-bold uppercase tracking-widest">Valor Ref.</span>
+                              )}
+                            </div>
                           </div>
                           <div className="flex bg-slate-50 rounded-xl p-3 justify-between items-center">
-                             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                               Área Total: <span className="text-slate-800">{item.m2t}m²</span>
+                             <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                               Terreno: <span className="text-slate-900 font-bold">{item.m2t}m²</span> {item.m2Exc ? `(+${item.m2Exc}m² exc)` : ''}
                              </div>
                              <ChevronRight size={16} className="text-slate-400" />
                           </div>
@@ -1063,10 +1457,11 @@ const App = () => {
                       <table className="w-full text-left bg-white relative">
                         <thead className="sticky top-0 bg-white/95 backdrop-blur z-10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
                           <tr className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">
-                            <th className="px-8 py-5">Propiedad</th>
-                            <th className="px-8 py-5">Modelo</th>
-                            <th className="px-8 py-5">Dimensiones</th>
-                            <th className="px-8 py-5"
+                            <th className="px-6 py-5">Propiedad</th>
+                            <th className="px-6 py-5">Estado</th>
+                            <th className="px-6 py-5">Modelo</th>
+                            <th className="px-6 py-5">Dimensiones</th>
+                            <th className="px-6 py-5"
                               ><button 
                                 onClick={() => setSortPrice(prev => prev === 'none' ? 'asc' : prev === 'asc' ? 'desc' : 'none')}
                                 className="flex items-center gap-1.5 hover:text-slate-700 transition-colors"
@@ -1075,7 +1470,7 @@ const App = () => {
                                 <ArrowUpDown size={12} className={sortPrice !== 'none' ? 'text-indigo-500' : ''} />
                               </button>
                             </th>
-                            <th className="px-8 py-5"></th>
+                            <th className="px-6 py-5"></th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
@@ -1083,25 +1478,47 @@ const App = () => {
                             <tr 
                               key={item.id} 
                               onClick={() => setSelectedLotId(item.id)} 
+                              tabIndex={0}
+                              aria-selected={selectedLotId === item.id}
+                              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedLotId(item.id); } }}
                               className={`cursor-pointer transition-colors group ${selectedLotId === item.id ? 'bg-indigo-50/50' : 'hover:bg-slate-50'}`}
                             >
-                              <td className="px-8 py-5">
+                              <td className="px-6 py-5">
                                 <div className="flex flex-col gap-1">
-                                  <span className="font-sans font-bold text-xl text-slate-900">Lote {item.lote}</span>
-                                  {item.nota && <span className="bg-emerald-50 text-emerald-700 text-[9px] font-bold px-2 py-0.5 rounded border border-emerald-100 self-start">{item.nota}</span>}
+                                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Lote</span>
+                                  <span className="font-sans font-bold text-xl text-slate-900 whitespace-nowrap leading-none">{item.lote}</span>
+                                  {item.nota && item.estado !== 'apartada' && <span className="bg-emerald-50 text-emerald-700 text-[9px] font-bold px-2 py-0.5 rounded border border-emerald-100 self-start whitespace-nowrap">{item.nota}</span>}
                                 </div>
                               </td>
-                              <td className="px-8 py-5">
+                              <td className="px-6 py-5">
+                                {item.estado === 'apartada' ? (
+                                  <span className="bg-amber-100 text-amber-900 border border-amber-300 text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider inline-block">
+                                    Apartada
+                                  </span>
+                                ) : (
+                                  <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider inline-block">
+                                    Disponible
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-6 py-5">
                                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">{item.prototipo}</span>
                               </td>
-                              <td className="px-8 py-5">
+                              <td className="px-6 py-5">
                                 <div className="flex flex-col gap-1">
                                   <span className="text-xs font-semibold text-slate-800">{item.m2c} <span className="text-slate-400 font-normal">m² const</span></span>
-                                  <span className="text-xs font-semibold text-slate-500">{item.m2t} <span className="text-slate-400 font-normal">m² terr</span></span>
+                                  <span className="text-xs font-semibold text-slate-500">{item.m2t} <span className="text-slate-400 font-normal">m² terr</span> {item.m2Exc ? <span className="text-[10px] text-slate-400 font-normal">(+{item.m2Exc}m² exc)</span> : null}</span>
                                 </div>
                               </td>
-                              <td className="px-8 py-5 text-lg font-light tracking-tight text-slate-900">{formatter.format(item.precio)}</td>
-                              <td className="px-8 py-5 text-right">
+                              <td className="px-6 py-5 whitespace-nowrap">
+                                <span className="text-lg font-semibold tracking-tight text-slate-900 block">{formatter.format(item.precio)}</span>
+                                {item.estado === 'apartada' ? (
+                                  <span className="text-[9px] text-amber-700 font-semibold uppercase tracking-wider">Valor Referencial</span>
+                                ) : (
+                                  <span className="text-[10px] text-emerald-700 font-semibold">Contado {formatter.format(item.precio * 0.93)}</span>
+                                )}
+                              </td>
+                              <td className="px-6 py-5 text-right">
                                 <div className={`w-8 h-8 rounded-full inline-flex items-center justify-center transition-colors ${selectedLotId === item.id ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-900 group-hover:text-white'}`}>
                                   <ArrowRight size={14} />
                                 </div>
@@ -1118,27 +1535,20 @@ const App = () => {
         </div>
 
         {/* Desktop Right Sidebar */}
-        {!isMobile && (
-          <div className="w-[450px] shrink-0">
-            {selectedLot ? (
-               <div className="h-full rounded-[2.5rem] overflow-hidden shadow-2xl border border-slate-200 bg-white">
-                 {renderLotDetailsContent()}
-               </div>
-            ) : (
-              <div className="h-full rounded-[2.5rem] border border-slate-200 border-dashed bg-slate-50/50 flex flex-col items-center justify-center p-12 text-center overflow-hidden">
-                 <motion.div 
-                    animate={{ scale: [1, 1.05, 1], opacity: [0.8, 1, 0.8] }} 
-                    transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
-                    className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-lg border border-slate-100 text-indigo-400 mb-6"
-                 >
-                    <Building2 strokeWidth={1.5} size={32} />
-                 </motion.div>
-                 <h3 className="text-2xl font-bold text-slate-900 mb-2">Selecciona una Residencia</h3>
-                 <p className="text-[11px] text-slate-500 font-medium uppercase tracking-widest leading-relaxed max-w-[250px]">Explora el plano maestro en 360° o usa el listado.</p>
-              </div>
-            )}
-          </div>
-        )}
+        <AnimatePresence>
+          {!isMobile && selectedLot && (
+            <motion.div
+              key="lot-sidebar"
+              initial={{ opacity: 0, x: 40 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 40 }}
+              transition={{ type: 'spring', damping: 28, stiffness: 260 }}
+              className="w-[440px] shrink-0 h-full rounded-[2.5rem] overflow-hidden shadow-2xl border border-slate-200 bg-white"
+            >
+              {renderLotDetailsContent()}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
     )}
 
@@ -1187,7 +1597,7 @@ const App = () => {
                      <span className="text-xs font-black uppercase tracking-widest">Cerrar</span>
                    </button>
                 </div>
-               <div className="flex-grow overflow-hidden mt-6 relative">
+               <div className="flex-grow overflow-hidden relative">
                  {/* Re-use the same details content component */}
                  <div className="absolute inset-0 overflow-y-auto">
                     {renderLotDetailsContent()}
