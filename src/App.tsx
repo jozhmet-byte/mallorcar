@@ -1201,7 +1201,7 @@ const App = () => {
       `🏗️ Construcción: ${lot.m2c} m²`,
       ``,
       `💰 Precio de Lista: *${formatter.format(lot.precio)}*`,
-      `🔑 Enganche Tradicional 20%: *${formatter.format(lot.precio * 0.2)}*`,
+      `🔑 Enganche Tradicional ${Math.round(downPaymentPct * 100)}%: *${formatter.format(lot.precio * downPaymentPct)}*`,
       ``,
       shareUrl ? `📄 *Ver cotización en línea:*\n${shareUrl}` : `📄 Te envío la cotización en PDF por este medio.`,
       ``,
