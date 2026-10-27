@@ -1224,19 +1224,20 @@ const App = () => {
       {/* Premium Header */}
       <header className="bg-white shadow-sm z-20 relative">
         {/* Specific Header Content */}
-        <div className="px-6 py-6 lg:px-12 lg:py-8 flex flex-col lg:flex-row justify-between lg:items-end gap-6">
-          <div>
-            <h1 className="mb-5">
+        <div className="px-6 py-6 lg:px-12 lg:py-6 flex flex-col lg:flex-row justify-between lg:items-center gap-6">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-5 lg:gap-8">
+            <h1 className="flex justify-center lg:block shrink-0">
               <img src="/logo-mallorca.png" alt="Mallorca Lifestyle Metepec" className="h-28 lg:h-32 w-auto select-none" draggable={false} />
             </h1>
             
+            <div>
             {/* Main Navigation Tabs */}
             <div className="bg-slate-100 p-1 rounded-full flex shadow-inner w-full sm:max-w-xs mb-4">
               <button onClick={() => setActiveTab('desarrollo')} className={`flex-1 px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.1em] transition-all ${activeTab === 'desarrollo' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}>Desarrollo</button>
               <button onClick={() => setActiveTab('modelos')} className={`flex-1 px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.1em] transition-all ${activeTab === 'modelos' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}>Modelos</button>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 [&>span]:whitespace-nowrap">
+            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2 [&>span]:whitespace-nowrap">
               <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-widest border border-slate-200">
                 51 Casas en Total
               </span>
@@ -1258,11 +1259,12 @@ const App = () => {
                 </a>
               </div>
             </div>
+            </div>
           </div>
 
           {/* Contextual Controls (Only visible in Desarrollo tab) */}
           {activeTab === 'desarrollo' && (
-            <div className="flex flex-col lg:flex-row gap-3 w-full lg:w-auto items-center lg:items-end animate-in fade-in duration-300">
+            <div className="flex flex-col lg:flex-row gap-3 w-full lg:w-auto lg:shrink-0 items-center lg:items-end animate-in fade-in duration-300">
               {/* Stage Controls */}
               <div className={`bg-slate-100 p-1 rounded-full flex flex-1 lg:flex-initial shadow-inner w-full lg:w-auto ${isMobile && viewMode === 'list' ? 'hidden' : ''}`}>
                 {[1, 2].map(stg => (
@@ -1281,11 +1283,11 @@ const App = () => {
 
               {/* View Toggles (Desktop only, mobile handles it via floating bar) */}
               <div className="bg-slate-100 p-1 rounded-full hidden lg:flex shadow-inner">
-                <button onClick={() => setViewMode('map')} className={`relative px-5 py-2.5 rounded-full text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 transition-colors z-10 ${viewMode === 'map' ? 'text-slate-900' : 'text-slate-500 hover:text-slate-800'}`}>
+                <button onClick={() => setViewMode('map')} className={`relative px-5 py-2.5 rounded-full text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 whitespace-nowrap transition-colors z-10 ${viewMode === 'map' ? 'text-slate-900' : 'text-slate-500 hover:text-slate-800'}`}>
                   {viewMode === 'map' && <motion.div layoutId="view-active" className="absolute inset-0 bg-white rounded-full -z-10 shadow-sm border border-slate-200" transition={{ type: "spring", bounce: 0.2, duration: 0.5 }} />}
                   <MapIcon size={14} strokeWidth={2.5}/> VISTA MAPA
                 </button>
-                <button onClick={() => setViewMode('list')} className={`relative px-5 py-2.5 rounded-full text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 transition-colors z-10 ${viewMode === 'list' ? 'text-slate-900' : 'text-slate-500 hover:text-slate-800'}`}>
+                <button onClick={() => setViewMode('list')} className={`relative px-5 py-2.5 rounded-full text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 whitespace-nowrap transition-colors z-10 ${viewMode === 'list' ? 'text-slate-900' : 'text-slate-500 hover:text-slate-800'}`}>
                   {viewMode === 'list' && <motion.div layoutId="view-active" className="absolute inset-0 bg-white rounded-full -z-10 shadow-sm border border-slate-200" transition={{ type: "spring", bounce: 0.2, duration: 0.5 }} />}
                   <List size={14} strokeWidth={2.5}/> VISTA LISTA
                 </button>
