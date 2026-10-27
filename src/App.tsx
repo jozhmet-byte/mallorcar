@@ -1179,9 +1179,9 @@ const App = () => {
         {/* Specific Header Content */}
         <div className="px-6 py-6 lg:px-12 lg:py-8 flex flex-col lg:flex-row justify-between lg:items-end gap-6">
           <div>
-            <span className="text-[10px] font-black tracking-[0.4em] uppercase text-indigo-600 block mb-2">Desarrollo Exclusivo</span>
-            <h1 className="text-4xl lg:text-5xl font-serif italic text-slate-900 leading-tight tracking-tight"><span className="font-black">Mallorca</span> Lifestyle</h1>
-            <span className="text-sm text-slate-400 font-medium tracking-[0.1em] uppercase mt-1 mb-4 block">Metepec, Estado de México</span>
+            <h1 className="mb-5">
+              <img src="/logo-mallorca.png" alt="Mallorca Lifestyle Metepec" className="h-28 lg:h-32 w-auto select-none" draggable={false} />
+            </h1>
             
             {/* Main Navigation Tabs */}
             <div className="bg-slate-100 p-1 rounded-full flex shadow-inner w-full sm:max-w-xs mb-4">
