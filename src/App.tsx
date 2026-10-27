@@ -30,7 +30,8 @@ import {
   Droplets,
   Home,
   Shirt,
-  FileText
+  FileText,
+  CheckCircle2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
@@ -112,10 +113,8 @@ const App = () => {
   const mapClickRef = useRef({ x: 0, y: 0 });
   const [linkCopied, setLinkCopied] = useState(false);
 
-  const [activeStage, setActiveStage] = useState(() => {
-    const initialLot = new URLSearchParams(window.location.search).get('lote');
-    return initialLot && !initialLot.startsWith('E2-') ? 1 : 2;
-  });
+  // La Etapa 1 está vendida: siempre iniciar en Etapa 2
+  const [activeStage, setActiveStage] = useState(2);
   const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
   const [filterPrototype, setFilterPrototype] = useState('Todos');
   const [isMobile, setIsMobile] = useState(false);
@@ -146,10 +145,8 @@ const App = () => {
   
   const mapContainerRef = useRef<HTMLDivElement>(null);
 
-  const stage1Available: LotItem[] = [
-    { id: '5', etapa: 1, lote: '5', prototipo: 'VANESSA', m2t: 206.62, m2Exc: 26.62, m2c: 232.52, precio: 7052355, nota: 'Última Vanessa', club: 80000, estado: 'disponible' },
-    { id: '9', etapa: 1, lote: '9', prototipo: 'VANESSA', m2t: 205.23, m2Exc: 25.23, m2c: 232.52, precio: 7342000, nota: 'Esquina', club: 80000, estado: 'disponible' },
-  ];
+  // Etapa 1: 100% vendida (los lotes 5 y 9 ya se vendieron)
+  const stage1Available: LotItem[] = [];
 
   // Lista de Precios Oficial Etapa 2 — Vigencia 31 de Julio del 2026
   const stage2Available: LotItem[] = [
@@ -428,16 +425,28 @@ const App = () => {
       for(let i=0; i<7; i++) lots.push(renderLot((10+i).toString(), getX(i*48, 45), offsetY + 400, 45, 65, stage));
 
       const isActive = activeStage === stage;
+      const stageLeft = allAvailable.filter(l => l.etapa === stage).length;
       const disp = allAvailable.filter(l => l.etapa === stage && l.estado === 'disponible').length;
-      const subtitle = disp === 0 ? 'Agotada' : disp <= 3 ? `Últimas ${disp} disponibles` : `${disp} disponibles`;
+      const soldOut = stageLeft === 0;
+      const subtitle = soldOut ? '100% vendido' : disp === 0 ? 'Agotada' : disp <= 3 ? `Últimas ${disp} disponibles` : `${disp} disponibles`;
       const titleX = mirrored ? offsetX - 160 : offsetX + 160;
+      const stampX = mirrored ? offsetX - 168 : offsetX + 168;
+      const stampY = offsetY + 210;
       
       return (
         <g key={`stage-group-${stage}`}>
            <text x={titleX} y={offsetY - 34} fontSize="48" fontWeight="700" fill="#475569" textAnchor="middle" opacity={isActive ? 1 : 0.35} className="font-serif italic tracking-wide" style={{ transition: 'opacity 0.6s ease-in-out' }}>Etapa {stage}</text>
-           <text x={titleX} y={offsetY - 12} fontSize="11" fontWeight="800" fill={disp > 0 && disp <= 3 ? '#059669' : '#64748b'} textAnchor="middle" className="uppercase tracking-[0.2em] font-sans">{subtitle}</text>
+           <text x={titleX} y={offsetY - 12} fontSize="11" fontWeight="800" fill={soldOut ? '#a8865a' : disp > 0 && disp <= 3 ? '#059669' : '#64748b'} textAnchor="middle" className="uppercase tracking-[0.2em] font-sans">{subtitle}</text>
            <path d={mirrored ? `M${offsetX - 10},${offsetY} L${offsetX - 10},${offsetY+450}` : `M${offsetX + 10},${offsetY} L${offsetX + 10},${offsetY+450}`} stroke="currentColor" strokeWidth="8" strokeDasharray="1 15" strokeLinecap="round" className="text-slate-200" opacity={isActive ? "0.8" : "0.3"} />
            {lots}
+           {soldOut && (
+             <g transform={`rotate(-8 ${stampX} ${stampY})`} className="pointer-events-none select-none">
+               <rect x={stampX - 105} y={stampY - 32} width="210" height="64" rx="12" fill="#ffffff" fillOpacity="0.94" stroke="#a8865a" strokeWidth="2.5" />
+               <rect x={stampX - 98} y={stampY - 25} width="196" height="50" rx="8" fill="none" stroke="#a8865a" strokeWidth="1" strokeOpacity="0.5" />
+               <text x={stampX} y={stampY + 3} textAnchor="middle" fontSize="24" fontWeight="900" fill="#a8865a" textLength="172" lengthAdjust="spacingAndGlyphs" className="font-sans">100% VENDIDO</text>
+               <text x={stampX} y={stampY + 18} textAnchor="middle" fontSize="8" fontWeight="800" fill="#1e2a5a" letterSpacing="2.5" className="font-sans">ETAPA {stage} AGOTADA</text>
+             </g>
+           )}
         </g>
       );
     };
@@ -1381,6 +1390,25 @@ const App = () => {
             const minPrice = dispFiltered.length ? Math.min(...dispFiltered.map(d => d.precio)) : 0;
             const minM2 = dispFiltered.length ? Math.min(...dispFiltered.map(d => d.precio / d.m2c)) : 0;
             const filterLabel = filterPrototype !== 'Todos' ? ` · ${toTitle(filterPrototype)}` : '';
+            if (stageLots.length === 0) {
+              return (
+                <div className="mb-2 bg-white p-5 lg:p-6 rounded-3xl shadow-sm border border-[#e8dcc8] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full bg-[#f7f1e8] border border-[#e8dcc8] flex items-center justify-center shrink-0">
+                      <CheckCircle2 size={24} className="text-[#a8865a]" />
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Disponibilidad · Etapa {activeStage}</p>
+                      <p className="text-2xl lg:text-3xl font-bold text-slate-900 leading-none">100% vendido</p>
+                      <p className="text-[11px] font-semibold text-slate-500 mt-1.5">{stageTotal} de {stageTotal} casas vendidas</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setActiveStage(2)} className="w-full sm:w-auto px-5 py-3 rounded-full bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-colors">
+                    Ver disponibilidad Etapa 2
+                  </button>
+                </div>
+              );
+            }
             return (
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-4 mb-2">
                 <div className="col-span-2 lg:col-span-1 bg-white p-4 lg:p-5 rounded-3xl shadow-sm border border-slate-100 flex flex-col justify-center">
@@ -1462,7 +1490,23 @@ const App = () => {
                     </div>
                   </div>
                   
-                  {isMobile ? (
+                  {filteredData.length === 0 ? (
+                    <div className="flex-grow flex flex-col items-center justify-center text-center p-10 gap-3">
+                      <div className="w-14 h-14 rounded-full bg-[#f7f1e8] border border-[#e8dcc8] flex items-center justify-center">
+                        <CheckCircle2 size={26} className="text-[#a8865a]" />
+                      </div>
+                      {allAvailable.some(l => l.etapa === activeStage) ? (
+                        <p className="text-sm font-semibold text-slate-500">No hay casas de este modelo en la Etapa {activeStage}.</p>
+                      ) : (
+                        <>
+                          <p className="text-2xl font-bold text-slate-900">Etapa {activeStage} · 100% vendido</p>
+                          <button onClick={() => setActiveStage(2)} className="mt-1 px-5 py-3 rounded-full bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-colors">
+                            Ver disponibilidad Etapa 2
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  ) : isMobile ? (
                     // Mobile Cards
                     <div className="flex-grow overflow-y-auto p-4 flex flex-col gap-4">
                       {filteredData.map(item => (
