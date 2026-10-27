@@ -15,7 +15,6 @@ import {
   Building2,
   ArrowUpDown,
   TreePine,
-  Maximize2,
   Loader2,
   ZoomIn,
   ZoomOut,
@@ -222,6 +221,12 @@ const App = () => {
   useEffect(() => {
     setDownPaymentPct(0.2);
   }, [selectedLotId]);
+
+  // El tooltip vive fuera del ciclo de React: ocultarlo al cambiar de vista o de etapa
+  useEffect(() => {
+    hideTooltip();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode, activeStage, selectedLotId]);
 
   const filteredData = useMemo(() => {
     return allAvailable.filter(item => {
@@ -444,7 +449,7 @@ const App = () => {
           {({ zoomIn, zoomOut, resetTransform }) => (
             <>
               {/* Zoom Controls */}
-              <div className="absolute top-4 right-4 lg:bottom-4 lg:top-auto lg:right-6 z-20 flex flex-col gap-2">
+              <div className="absolute bottom-4 right-6 z-20 hidden lg:flex flex-col gap-2">
                 <button onClick={() => zoomIn()} className="bg-white/95 backdrop-blur-sm p-2.5 rounded-xl shadow-lg border border-slate-200 text-slate-600 hover:text-slate-900 transition-colors">
                   <ZoomIn size={18} />
                 </button>
@@ -457,9 +462,10 @@ const App = () => {
               </div>
               
               <TransformComponent wrapperClass="!w-full !h-full" contentClass="!w-full !h-full flex items-center justify-center">
-                <div className="w-[1000px] lg:w-full h-full flex items-center justify-center pt-14 lg:p-8 lg:pt-16">
-                  <svg viewBox="-50 0 1000 600" preserveAspectRatio="xMidYMid meet" className="w-full h-full text-slate-200 drop-shadow-sm cursor-grab active:cursor-grabbing">
-                    {renderStage(1, 100, 80, false)}
+                <div className="w-full h-full flex items-center justify-center pt-16 pb-16 px-2 lg:p-8 lg:pt-16">
+                  {/* En móvil se encuadra solo la etapa activa para que los lotes sean legibles y fáciles de tocar */}
+                  <svg viewBox={isMobile ? (activeStage === 1 ? '40 0 485 560' : '330 0 485 560') : '-50 0 1000 600'} preserveAspectRatio="xMidYMid meet" className="w-full h-full text-slate-200 drop-shadow-sm cursor-grab active:cursor-grabbing">
+                    {(!isMobile || activeStage === 1) && renderStage(1, 100, 80, false)}
                     
                     {/* Center Amenities */}
                     <g transform="translate(450, 280)">
@@ -469,7 +475,7 @@ const App = () => {
                       <text x="0" y="22" textAnchor="middle" fill="#94A3B8" fontSize="11" fontWeight="bold" className="uppercase tracking-[0.2em] font-sans">Casa Club</text>
                     </g>
 
-                    {renderStage(2, 800, 80, true)}
+                    {(!isMobile || activeStage === 2) && renderStage(2, 800, 80, true)}
                   </svg>
                 </div>
               </TransformComponent>
@@ -542,17 +548,18 @@ const App = () => {
           <div className="relative h-40 md:h-44 overflow-hidden">
             <img src="/hero-mallorca.jpg" alt="Mallorca Lifestyle, Metepec" className="w-full h-full object-cover" />
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-900/40 to-slate-900/10" />
-            <div className="absolute top-4 left-5 flex items-center gap-2">
-              <span className="px-3 py-1 bg-white/90 backdrop-blur text-slate-800 text-[10px] font-black uppercase tracking-widest rounded-full">
+            <div className="absolute top-4 left-5 right-4 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="px-3 py-1 bg-white/90 backdrop-blur text-slate-800 text-[10px] font-black uppercase tracking-widest rounded-full whitespace-nowrap">
                 Etapa {selectedLot.etapa}
               </span>
               {isApartada ? (
-                <span className="px-3 py-1 bg-amber-300 text-amber-950 text-[10px] font-black uppercase tracking-widest rounded-full">Apartada</span>
+                <span className="px-3 py-1 bg-amber-300 text-amber-950 text-[10px] font-black uppercase tracking-widest rounded-full whitespace-nowrap">Apartada</span>
               ) : (
-                <span className="px-3 py-1 bg-emerald-300 text-emerald-950 text-[10px] font-black uppercase tracking-widest rounded-full">Disponible</span>
+                <span className="px-3 py-1 bg-emerald-300 text-emerald-950 text-[10px] font-black uppercase tracking-widest rounded-full whitespace-nowrap">Disponible</span>
               )}
             </div>
-            <div className="absolute top-4 right-4 flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 shrink-0">
               <button
                 onClick={() => {
                   const url = `${window.location.origin}/?lote=${encodeURIComponent(selectedLot.id)}`;
@@ -563,10 +570,9 @@ const App = () => {
                 }}
                 aria-label="Copiar enlace de este lote"
                 title="Copiar enlace de este lote"
-                className={`h-9 px-3 flex items-center gap-1.5 rounded-full transition-colors shadow text-[10px] font-black uppercase tracking-widest ${linkCopied ? 'bg-emerald-400 text-emerald-950' : 'bg-white/90 hover:bg-white text-slate-700'}`}
+                className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors shadow ${linkCopied ? 'bg-emerald-400 text-emerald-950' : 'bg-white/90 hover:bg-white text-slate-700'}`}
               >
-                {linkCopied ? <Check size={14} /> : <Link2 size={14} />}
-                {linkCopied ? 'Copiado' : 'Enlace'}
+                {linkCopied ? <Check size={16} /> : <Link2 size={16} />}
               </button>
               {lotNavList.length > 1 && (
                 <>
@@ -598,6 +604,7 @@ const App = () => {
                   <X size={16} />
                 </button>
               )}
+            </div>
             </div>
             <div className="absolute bottom-4 left-5 right-5 flex items-end justify-between gap-3">
               <div>
@@ -656,21 +663,21 @@ const App = () => {
 
           {/* Specs */}
           <div className="grid grid-cols-3 gap-2 mb-6">
-            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 flex flex-col">
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Terreno</span>
-              <span className="text-lg font-bold text-slate-800 leading-tight">{selectedLot.m2t} <span className="text-xs font-normal text-slate-400">m²</span></span>
+            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 flex flex-col min-w-0">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1 truncate">Terreno</span>
+              <span className="text-base sm:text-lg font-bold text-slate-800 leading-tight whitespace-nowrap">{selectedLot.m2t} <span className="text-xs font-normal text-slate-400">m²</span></span>
               <span className="text-[10px] text-slate-500 mt-1 font-medium leading-snug">
                 {selectedLot.m2Exc ? `Base 180 + ${selectedLot.m2Exc} exc.` : 'Sin excedente'}
               </span>
             </div>
-            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 flex flex-col">
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Construcción</span>
-              <span className="text-lg font-bold text-slate-800 leading-tight">{selectedLot.m2c} <span className="text-xs font-normal text-slate-400">m²</span></span>
+            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 flex flex-col min-w-0">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1 truncate"><span className="min-[400px]:hidden">Constr.</span><span className="hidden min-[400px]:inline">Construcción</span></span>
+              <span className="text-base sm:text-lg font-bold text-slate-800 leading-tight whitespace-nowrap">{selectedLot.m2c} <span className="text-xs font-normal text-slate-400">m²</span></span>
               <span className="text-[10px] text-slate-500 mt-1 font-medium leading-snug">{toTitle(selectedLot.prototipo)}</span>
             </div>
-            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 flex flex-col">
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Casa Club</span>
-              <span className="text-lg font-bold text-slate-800 leading-tight">{formatter.format(selectedLot.club)}</span>
+            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 flex flex-col min-w-0">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1 truncate">Casa Club</span>
+              <span className="text-base sm:text-lg font-bold text-slate-800 leading-tight whitespace-nowrap">{formatter.format(selectedLot.club)}</span>
               <span className="text-[10px] text-slate-500 mt-1 font-medium leading-snug">Equipamiento</span>
             </div>
           </div>
@@ -743,9 +750,9 @@ const App = () => {
 
             <div className="flex flex-col gap-2">
               {/* Contado */}
-              <div className="bg-white rounded-2xl p-3.5 border border-emerald-100 shadow-sm flex items-center justify-between">
+              <div className="bg-white rounded-2xl p-3.5 border border-emerald-100 shadow-sm flex items-center justify-between gap-3">
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <span className="text-xs font-black text-slate-900">Contado (1 sola exhibición)</span>
                     <span className="bg-emerald-100 text-emerald-800 font-black text-[9px] px-2 py-0.5 rounded-full uppercase tracking-wider">7% OFF</span>
                   </div>
@@ -757,9 +764,9 @@ const App = () => {
               </div>
 
               {/* Crédito Preventa */}
-              <div className="bg-white rounded-2xl p-3.5 border border-slate-100 shadow-sm flex items-center justify-between">
+              <div className="bg-white rounded-2xl p-3.5 border border-slate-100 shadow-sm flex items-center justify-between gap-3">
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <span className="text-xs font-bold text-slate-800">Crédito Preventa (Plan Crédito)</span>
                     <span className="bg-indigo-100 text-indigo-800 font-black text-[9px] px-2 py-0.5 rounded-full uppercase tracking-wider">5% OFF</span>
                   </div>
@@ -771,9 +778,9 @@ const App = () => {
               </div>
 
               {/* Comercial */}
-              <div className="bg-white rounded-2xl p-3.5 border border-slate-100 shadow-sm flex items-center justify-between">
+              <div className="bg-white rounded-2xl p-3.5 border border-slate-100 shadow-sm flex items-center justify-between gap-3">
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <span className="text-xs font-bold text-slate-800">Comercial (3 Mensualidades)</span>
                     <span className="bg-indigo-100 text-indigo-800 font-black text-[9px] px-2 py-0.5 rounded-full uppercase tracking-wider">5% OFF</span>
                   </div>
@@ -785,7 +792,7 @@ const App = () => {
               </div>
 
               {/* Tradicional */}
-              <div className="bg-white rounded-2xl p-3.5 border border-slate-100 shadow-sm flex items-center justify-between">
+              <div className="bg-white rounded-2xl p-3.5 border border-slate-100 shadow-sm flex items-center justify-between gap-3">
                 <div>
                   <span className="text-xs font-bold text-slate-800">Tradicional (20% Contrato / 80% Escritura)</span>
                   <span className="text-[10px] text-slate-400 block">Precio de Lista estándar</span>
@@ -829,19 +836,19 @@ const App = () => {
 
         {/* Footer actions */}
         <div className="p-5 md:p-6 bg-white border-t border-slate-100 flex items-center justify-between gap-4 z-10">
-          <div className="flex flex-col">
-            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">
-              {selectedLot.estado === 'apartada' ? 'Estado: Apartada' : 'De contado (−7%)'}
+          <div className="flex flex-col min-w-0">
+            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1 whitespace-nowrap">
+              {selectedLot.estado === 'apartada' ? 'Apartada · Valor ref.' : 'De contado (−7%)'}
             </span>
-            <span className="text-base font-bold text-slate-900 tracking-tight">
-              {selectedLot.estado === 'apartada' ? 'Cotización informativa' : formatter.format(selectedLot.precio * 0.93)}
+            <span className="text-base font-bold text-slate-900 tracking-tight whitespace-nowrap">
+              {selectedLot.estado === 'apartada' ? formatter.format(selectedLot.precio) : formatter.format(selectedLot.precio * 0.93)}
             </span>
           </div>
           <button 
             onClick={() => { setShowQuoteModal(true); setClientName(''); setAgentName(''); setAgentPhone(''); setAgentEmail(''); setGeneratedPdfUrl(null); }}
-            className={`px-8 py-4 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] transition-all flex items-center gap-3 min-w-[150px] justify-center text-white ${selectedLot.estado === 'apartada' ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-600/20' : 'bg-slate-900 hover:bg-indigo-600 shadow-indigo-600/20'} hover:shadow-xl`}
+            className={`px-6 sm:px-8 py-4 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] whitespace-nowrap transition-all flex items-center gap-3 shrink-0 justify-center text-white ${selectedLot.estado === 'apartada' ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-600/20' : 'bg-slate-900 hover:bg-indigo-600 shadow-indigo-600/20'} hover:shadow-xl`}
           >
-            {selectedLot.estado === 'apartada' ? 'Consultar / Cotizar' : 'Cotizar'} <ArrowRight size={14} />
+            {selectedLot.estado === 'apartada' ? 'Consultar' : 'Cotizar'} <ArrowRight size={14} />
           </button>
         </div>
       </div>
@@ -1213,7 +1220,7 @@ const App = () => {
                   <button 
                     key={stg}
                     onClick={() => {setActiveStage(stg); setFilterPrototype('Todos'); setSelectedLotId(null);}}
-                    className={`relative flex-1 px-4 lg:px-6 py-2.5 rounded-full font-black uppercase tracking-[0.2em] transition-all z-10 ${activeStage === stg ? 'text-white text-[10px]' : 'text-slate-500 hover:text-slate-800 text-[10px]'}`}
+                    className={`relative flex-1 px-4 lg:px-6 py-2.5 rounded-full font-black uppercase tracking-[0.2em] whitespace-nowrap transition-all z-10 ${activeStage === stg ? 'text-white text-[10px]' : 'text-slate-500 hover:text-slate-800 text-[10px]'}`}
                   >
                     {activeStage === stg && (
                       <motion.div layoutId="stage-active" className="absolute inset-0 bg-slate-900 rounded-full -z-10 shadow-md" transition={{ type: "spring", bounce: 0.2, duration: 0.5 }} />
@@ -1351,25 +1358,25 @@ const App = () => {
                 <div className="bg-white p-4 lg:p-5 rounded-3xl shadow-sm border border-slate-100 flex flex-col justify-center">
                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Precio m² desde{filterLabel}</p>
                   <span className="text-xl lg:text-2xl font-bold text-slate-900 leading-none">{formatter.format(minM2)}</span>
-                  <p className="text-[10px] font-semibold text-slate-500 mt-1.5">Sobre m² de construcción</p>
+                  <p className="text-[10px] font-semibold text-slate-500 mt-1.5">Por m² construido</p>
                 </div>
               </div>
             );
           })()}
 
           {/* Primary View */}
-          <div className={`flex-grow bg-white rounded-[2rem] lg:rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden relative ${viewMode === 'map' || !isMobile ? 'min-h-[500px]' : ''}`}>
+          <div className={`flex-grow bg-white rounded-[2rem] lg:rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden relative ${viewMode === 'map' || !isMobile ? 'min-h-[520px] lg:min-h-[640px]' : ''}`}>
              
              {viewMode === 'map' ? (
-                <div className="absolute inset-0">
+                <div key="map-view" className="absolute inset-0">
                   {renderMasterPlan()}
                   {/* Filtro por modelo directo en el mapa */}
-                  <div className="absolute top-4 left-4 z-10 flex gap-1 bg-white/95 backdrop-blur-sm border border-slate-200 p-1 rounded-full shadow-lg max-w-[calc(100%-5rem)] overflow-x-auto [scrollbar-width:none]">
+                  <div className="absolute top-4 left-4 z-10 flex gap-1 bg-white/95 backdrop-blur-sm border border-slate-200 p-1 rounded-full shadow-lg max-w-[calc(100%-2rem)] lg:max-w-[calc(100%-5rem)] overflow-x-auto [scrollbar-width:none]">
                     {prototypes.map(p => (
                       <button
                         key={`map-filter-${p}`}
                         onClick={() => setFilterPrototype(p)}
-                        className={`px-3.5 py-1.5 rounded-full text-[9px] font-black uppercase tracking-wider whitespace-nowrap transition-colors ${filterPrototype === p ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-900'}`}
+                        className={`px-2.5 lg:px-3.5 py-1.5 rounded-full text-[9px] font-black uppercase tracking-wide lg:tracking-wider whitespace-nowrap transition-colors ${filterPrototype === p ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-900'}`}
                       >
                         {p === 'Todos' ? 'Todos' : toTitle(p)}
                       </button>
@@ -1383,14 +1390,9 @@ const App = () => {
                       <span className="hidden lg:inline text-[10px] text-slate-400 font-medium pl-4 border-l border-slate-200">Haz clic en un lote para ver detalle</span>
                     </div>
                   </div>
-                  {isMobile && (
-                    <div className="absolute top-4 right-4 bg-slate-900/80 backdrop-blur-md text-white rounded-full p-2.5 shadow-xl animate-pulse pointer-events-none">
-                      <Maximize2 size={16} />
-                    </div>
-                  )}
                 </div>
              ) : (
-                <div className={`${isMobile ? '' : 'absolute inset-0'} flex flex-col bg-[#fafaf9]`}>
+                <div key="list-view" className={`${isMobile ? '' : 'absolute inset-0'} flex flex-col bg-[#fafaf9]`}>
                   <div className="p-4 lg:p-6 bg-white border-b border-slate-100 flex flex-col lg:flex-row lg:items-center gap-4">
                     <div className="flex items-center gap-2 text-slate-400">
                       <Filter size={16} />
@@ -1423,30 +1425,32 @@ const App = () => {
                           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedLotId(item.id); } }}
                           className={`bg-white p-5 rounded-2xl border transition-all ${selectedLotId === item.id ? 'border-indigo-500 shadow-md ring-2 ring-indigo-500/20' : 'border-slate-200 shadow-sm'}`}
                         >
-                          <div className="flex justify-between items-start mb-4">
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <h3 className="font-sans font-bold text-2xl text-slate-900">Lote {item.lote}</h3>
+                          <div className="flex justify-between items-start gap-3 mb-4">
+                            <div className="min-w-0">
+                              <h3 className="font-sans font-bold text-xl text-slate-900 whitespace-nowrap leading-tight">Lote {item.lote}</h3>
+                              <div className="flex items-center gap-2 mt-1.5">
                                 {item.estado === 'apartada' ? (
                                   <span className="bg-amber-100 text-amber-900 border border-amber-300 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">Apartada</span>
                                 ) : (
                                   <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">Disponible</span>
                                 )}
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{toTitle(item.prototipo)}</span>
                               </div>
-                              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{item.prototipo}</p>
                             </div>
-                            <div className="text-right">
-                              <span className="text-lg font-light tracking-tight block">{formatter.format(item.precio)}</span>
-                              {item.estado === 'apartada' && (
-                                <span className="text-[9px] text-amber-700 font-bold uppercase tracking-widest">Valor Ref.</span>
+                            <div className="text-right shrink-0">
+                              <span className="text-lg font-bold text-slate-900 tracking-tight block leading-tight">{formatter.format(item.precio)}</span>
+                              {item.estado === 'apartada' ? (
+                                <span className="text-[10px] text-amber-700 font-bold uppercase tracking-widest">Valor Ref.</span>
+                              ) : (
+                                <span className="text-[11px] text-emerald-700 font-semibold">Contado {formatter.format(item.precio * 0.93)}</span>
                               )}
                             </div>
                           </div>
-                          <div className="flex bg-slate-50 rounded-xl p-3 justify-between items-center">
-                             <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                               Terreno: <span className="text-slate-900 font-bold">{item.m2t}m²</span> {item.m2Exc ? `(+${item.m2Exc}m² exc)` : ''}
+                          <div className="flex bg-slate-50 rounded-xl px-3 py-2.5 justify-between items-center gap-2">
+                             <div className="text-[11px] text-slate-500 font-medium">
+                               <span className="text-slate-900 font-bold">{item.m2t} m²</span> terreno{item.m2Exc ? <span className="text-slate-400"> (+{item.m2Exc})</span> : ''} · <span className="text-slate-900 font-bold">{item.m2c} m²</span> const.
                              </div>
-                             <ChevronRight size={16} className="text-slate-400" />
+                             <ChevronRight size={16} className="text-slate-400 shrink-0" />
                           </div>
                         </div>
                       ))}
@@ -1464,7 +1468,7 @@ const App = () => {
                             <th className="px-6 py-5"
                               ><button 
                                 onClick={() => setSortPrice(prev => prev === 'none' ? 'asc' : prev === 'asc' ? 'desc' : 'none')}
-                                className="flex items-center gap-1.5 hover:text-slate-700 transition-colors"
+                                className="flex items-center gap-1.5 uppercase tracking-[0.2em] hover:text-slate-700 transition-colors"
                               >
                                 Precio
                                 <ArrowUpDown size={12} className={sortPrice !== 'none' ? 'text-indigo-500' : ''} />
@@ -1554,7 +1558,7 @@ const App = () => {
 
 
       {/* Mobile Floating View Controller (Bottom) */}
-      {isMobile && !selectedLot && (
+      {isMobile && !selectedLot && activeTab === 'desarrollo' && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 bg-slate-900 text-white p-1.5 rounded-full flex shadow-2xl items-center w-[200px]">
             <button onClick={() => setViewMode('map')} className={`flex-1 py-3 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${viewMode === 'map' ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'}`}>
               <MapIcon size={14} /> Mapa
