@@ -1651,6 +1651,18 @@ const App = () => {
       </main>
     )}
 
+      {/* Footer */}
+      <footer className="max-w-[1400px] w-full mx-auto px-4 lg:px-8 pt-4 pb-2">
+        <div className="border-t border-slate-200 pt-4 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-3 text-[11px] text-slate-400">
+          <span>
+            Desarrollado por{' '}
+            <a href="https://7tech.com.mx" target="_blank" rel="noopener noreferrer" className="font-bold text-slate-600 hover:text-indigo-600 transition-colors">7tech.com.mx</a>
+          </span>
+          <span className="hidden sm:inline text-slate-300">·</span>
+          <a href="mailto:jozhmet@gmail.com" className="font-medium text-slate-500 hover:text-indigo-600 transition-colors">jozhmet@gmail.com</a>
+        </div>
+      </footer>
+
 
       {/* Mobile Floating View Controller (Bottom) */}
       {isMobile && !selectedLot && activeTab === 'desarrollo' && (
