@@ -129,10 +129,20 @@ const App = () => {
   const [sortPrice, setSortPrice] = useState<'none' | 'asc' | 'desc'>('none');
   const [showQuoteModal, setShowQuoteModal] = useState(false);
   const [clientName, setClientName] = useState('');
-  const [agentName, setAgentName] = useState('');
-  const [agentPhone, setAgentPhone] = useState('');
-  const [agentEmail, setAgentEmail] = useState('');
+  // Los datos del asesor se recuerdan en este dispositivo para no capturarlos en cada cotización
+  const savedAgent = (() => { try { return JSON.parse(localStorage.getItem('mallorca_asesor') || '{}'); } catch { return {}; } })();
+  const [agentName, setAgentName] = useState<string>(savedAgent.name || '');
+  const [agentPhone, setAgentPhone] = useState<string>(savedAgent.phone || '');
+  const [agentEmail, setAgentEmail] = useState<string>(savedAgent.email || '');
   const [generatedPdfUrl, setGeneratedPdfUrl] = useState<string | null>(null);
+  // Enlace público y permanente del PDF en Vercel Blob
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle');
+  const [shareLinkCopied, setShareLinkCopied] = useState(false);
+
+  useEffect(() => {
+    try { localStorage.setItem('mallorca_asesor', JSON.stringify({ name: agentName, phone: agentPhone, email: agentEmail })); } catch { /* sin almacenamiento */ }
+  }, [agentName, agentPhone, agentEmail]);
   
   const mapContainerRef = useRef<HTMLDivElement>(null);
 
@@ -845,7 +855,7 @@ const App = () => {
             </span>
           </div>
           <button 
-            onClick={() => { setShowQuoteModal(true); setClientName(''); setAgentName(''); setAgentPhone(''); setAgentEmail(''); setGeneratedPdfUrl(null); }}
+            onClick={() => { setShowQuoteModal(true); setClientName(''); setGeneratedPdfUrl(null); setShareUrl(null); setUploadState('idle'); }}
             className={`px-6 sm:px-8 py-4 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] whitespace-nowrap transition-all flex items-center gap-3 shrink-0 justify-center text-white ${selectedLot.estado === 'apartada' ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-600/20' : 'bg-slate-900 hover:bg-indigo-600 shadow-indigo-600/20'} hover:shadow-xl`}
           >
             {selectedLot.estado === 'apartada' ? 'Consultar' : 'Cotizar'} <ArrowRight size={14} />
@@ -1116,6 +1126,50 @@ const App = () => {
     return { blob, url, doc };
   };
 
+  // Sube el PDF a Vercel Blob (vía /api/cotizacion) para obtener un enlace permanente
+  // y registrar la cotización en el historial.
+  const uploadQuote = async (blob: Blob, name: string) => {
+    if (!selectedLot) return;
+    const lot = selectedLot;
+    setUploadState('uploading');
+    setShareUrl(null);
+    try {
+      const form = new FormData();
+      form.append('pdf', blob, `Cotizacion_Mallorca_Lote_${lot.lote}.pdf`);
+      form.append('meta', JSON.stringify({
+        cliente: name,
+        asesor: agentName,
+        telefonoAsesor: agentPhone,
+        emailAsesor: agentEmail,
+        lote: lot.lote,
+        etapa: lot.etapa,
+        prototipo: lot.prototipo,
+        estado: lot.estado,
+        precio: lot.precio,
+        precioContado: Math.round(lot.precio * 0.93),
+      }));
+      const res = await fetch('/api/cotizacion', { method: 'POST', body: form });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (!data.url) throw new Error('Sin URL');
+      setShareUrl(data.url);
+      setUploadState('done');
+    } catch (e) {
+      console.warn('No se pudo subir la cotización:', e);
+      setUploadState('error');
+    }
+  };
+
+  const generateQuote = async (name: string) => {
+    setIsCotizando(true);
+    try {
+      const result = await generatePDF(name);
+      if (result) uploadQuote(result.blob, name);
+    } finally {
+      setIsCotizando(false);
+    }
+  };
+
   const handleDownloadPdf = () => {
     if (!generatedPdfUrl || !selectedLot) return;
     const a = document.createElement('a');
@@ -1124,53 +1178,41 @@ const App = () => {
     a.click();
   };
 
-  const handleShareWhatsApp = async () => {
+  const handleShareWhatsApp = () => {
     if (!selectedLot || !generatedPdfUrl) return;
     const lot = selectedLot;
-    const fileName = `Cotizacion_Mallorca_Lote_${lot.lote.replace(/\s/g, '_')}.pdf`;
-    const text = [
+    const cliente = clientName.trim();
+    const asesor = agentName.trim();
+    const isApartada = lot.estado === 'apartada';
+    const lines = [
       `🏡 *Mallorca Lifestyle — Metepec*`,
       ``,
-      `📋 *Cotización Lote ${lot.lote}* ${lot.estado === 'apartada' ? '(APARTADA)' : ''}`,
-      `Etapa ${lot.etapa} · Prototipo ${lot.prototipo}`,
-      `Terreno: ${lot.m2t} m² ${lot.m2Exc ? `(Base 180 m² + ${lot.m2Exc} m² exc)` : ''} · Construcción: ${lot.m2c} m²`,
+      cliente ? `Hola *${cliente}*, te comparto la cotización del *Lote ${lot.lote}*${isApartada ? ' (apartado, valor de referencia)' : ''}.` : `Te comparto la cotización del *Lote ${lot.lote}*${isApartada ? ' (apartado, valor de referencia)' : ''}.`,
+      `Etapa ${lot.etapa} · Modelo ${toTitle(lot.prototipo)} · Terreno ${lot.m2t} m² · Construcción ${lot.m2c} m²`,
       ``,
-      `💰 *Precio de Lista: ${formatter.format(lot.precio)}*`,
-      `✨ *Pago de Contado (7% dto): ${formatter.format(lot.precio * 0.93)}*`,
-      `🏦 *Crédito Preventa / Comercial (5% dto): ${formatter.format(lot.precio * 0.95)}*`,
-      `🏦 Enganche Tradicional 20%: ${formatter.format(lot.precio * 0.2)}`,
+      `💰 Precio de lista: *${formatter.format(lot.precio)}*`,
+      `✨ Contado (−7%): *${formatter.format(lot.precio * 0.93)}*`,
+      `🏦 Crédito preventa / comercial (−5%): ${formatter.format(lot.precio * 0.95)}`,
       `🏊 Equipamiento Casa Club: ${formatter.format(lot.club)}`,
       ``,
-      `📅 *Lista oficial vigente:* 31 de Julio del 2026`,
+      shareUrl
+        ? `📄 *Descarga tu cotización en PDF:*\n${shareUrl}`
+        : `📄 Te envío la cotización en PDF por este medio.`,
       ``,
-      `🔗 *Ver este lote en línea:* ${window.location.origin}/?lote=${encodeURIComponent(lot.id)}`,
-      `📖 *Conoce el desarrollo (Brochure):* ${window.location.origin}/Brochure_Mallorca_1.pdf`
-    ].join('\n');
-
-    try {
-      // Fetch the blob from the object URL
-      const response = await fetch(generatedPdfUrl);
-      const blob = await response.blob();
-      const file = new File([blob], fileName, { type: 'application/pdf' });
-
-      // Use Web Share API if available (mobile)
-      if (navigator.share && navigator.canShare?.({ files: [file] })) {
-        await navigator.share({
-          title: `Cotización Lote ${lot.lote}`,
-          text,
-          files: [file],
-        });
-        return;
-      }
-    } catch (e) {
-      // User cancelled share or API not available — fall through to fallback
+      `🔗 Ver el lote en línea: ${window.location.origin}/?lote=${encodeURIComponent(lot.id)}`,
+      `📖 Brochure del desarrollo: ${window.location.origin}/Brochure_Mallorca_1.pdf`,
+      `📅 Lista oficial vigente: 31 de julio de 2026`,
+    ];
+    if (asesor || agentPhone) {
+      lines.push(``, `Quedo a tus órdenes,`, [asesor && `*${asesor}*`, 'Asesor Mallorca Lifestyle'].filter(Boolean).join(' · '));
+      if (agentPhone) lines.push(`📞 ${agentPhone}`);
     }
 
-    // Fallback: download PDF + open WhatsApp with text
-    handleDownloadPdf();
-    const msg = encodeURIComponent(text + '\n\n📄 Te adjunto la cotización en PDF.');
-    window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
+    // Si no se pudo obtener el enlace, se descarga el PDF para adjuntarlo a mano
+    if (!shareUrl) handleDownloadPdf();
+    window.open(`https://wa.me/?text=${encodeURIComponent(lines.join('\n'))}`, '_blank');
   };
+
 
   return (
     <div className="min-h-screen bg-[#F0F2F5] pb-24 lg:pb-8 font-sans text-slate-900 selection:bg-indigo-100 selection:text-indigo-900 flex flex-col">
@@ -1663,7 +1705,7 @@ const App = () => {
 
                     {/* Agent Section */}
                     <div className="border-t border-slate-100 pt-4">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-3">Datos del Asesor <span className="font-normal">(opcional)</span></span>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-3">Datos del Asesor <span className="font-normal normal-case tracking-normal">· se incluyen en el PDF y en WhatsApp</span></span>
                       <div className="flex flex-col gap-2">
                         <div className="relative">
                           <User size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -1703,10 +1745,7 @@ const App = () => {
                     {/* Action Buttons */}
                     <div className="flex flex-col gap-2">
                       <button 
-                        onClick={() => {
-                          setIsCotizando(true);
-                          setTimeout(async () => { await generatePDF(clientName); setIsCotizando(false); }, 600);
-                        }}
+                        onClick={() => generateQuote(clientName.trim())}
                         disabled={isCotizando}
                         className="w-full py-4 rounded-xl bg-slate-900 text-white font-black text-xs uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-indigo-600 transition-all disabled:opacity-70"
                       >
@@ -1714,10 +1753,7 @@ const App = () => {
                       </button>
                       {!clientName && (
                         <button 
-                          onClick={() => {
-                            setIsCotizando(true);
-                            setTimeout(async () => { await generatePDF(''); setIsCotizando(false); }, 600);
-                          }}
+                          onClick={() => generateQuote('')}
                           disabled={isCotizando}
                           className="w-full py-3.5 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-slate-200 transition-all disabled:opacity-70"
                         >
@@ -1741,6 +1777,36 @@ const App = () => {
                       <p className="text-xs text-slate-500">Lote {selectedLot.lote} · {clientName || 'Cotización General'}</p>
                     </div>
 
+                    {/* Enlace permanente del PDF */}
+                    <div className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3 text-left">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-1.5">Enlace de la cotización</span>
+                      {uploadState === 'uploading' && (
+                        <div className="flex items-center gap-2 text-xs text-slate-500"><Loader2 size={14} className="animate-spin" /> Generando enlace permanente…</div>
+                      )}
+                      {uploadState === 'done' && shareUrl && (
+                        <div className="flex items-center gap-2">
+                          <a href={shareUrl} target="_blank" rel="noopener noreferrer" className="flex-1 min-w-0 truncate text-xs font-medium text-indigo-600 hover:underline">{shareUrl.replace(/^https?:\/\//, '')}</a>
+                          <button
+                            onClick={() => { navigator.clipboard?.writeText(shareUrl).then(() => { setShareLinkCopied(true); setTimeout(() => setShareLinkCopied(false), 1800); }); }}
+                            className={`shrink-0 h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-colors ${shareLinkCopied ? 'bg-emerald-500 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'}`}
+                          >
+                            {shareLinkCopied ? <><Check size={12} /> Copiado</> : <><Link2 size={12} /> Copiar</>}
+                          </button>
+                        </div>
+                      )}
+                      {uploadState === 'error' && (
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs text-amber-700">No se pudo crear el enlace. Al enviar por WhatsApp se descargará el PDF para adjuntarlo.</span>
+                          <button
+                            onClick={async () => { if (generatedPdfUrl) { const b = await (await fetch(generatedPdfUrl)).blob(); uploadQuote(b, clientName.trim()); } }}
+                            className="shrink-0 h-8 px-3 rounded-lg bg-white border border-slate-200 text-[10px] font-black uppercase tracking-wider text-slate-600 hover:bg-slate-100"
+                          >
+                            Reintentar
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
                     <div className="flex flex-col gap-2 w-full">
                       <button 
                         onClick={handleDownloadPdf}
@@ -1750,12 +1816,13 @@ const App = () => {
                       </button>
                       <button 
                         onClick={handleShareWhatsApp}
-                        className="w-full py-4 rounded-xl bg-emerald-600 text-white font-black text-xs uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-emerald-700 transition-all"
+                        disabled={uploadState === 'uploading'}
+                        className="w-full py-4 rounded-xl bg-emerald-600 text-white font-black text-xs uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-emerald-700 transition-all disabled:opacity-60 disabled:cursor-wait"
                       >
-                        <MessageCircle size={16} /> Enviar por WhatsApp
+                        {uploadState === 'uploading' ? <><Loader2 size={16} className="animate-spin" /> Preparando enlace…</> : <><MessageCircle size={16} /> Enviar por WhatsApp</>}
                       </button>
                       <button 
-                        onClick={() => { setShowQuoteModal(false); setGeneratedPdfUrl(null); }}
+                        onClick={() => { setShowQuoteModal(false); setGeneratedPdfUrl(null); setShareUrl(null); setUploadState('idle'); }}
                         className="w-full py-3 rounded-xl text-slate-500 font-bold text-xs uppercase tracking-widest hover:bg-slate-100 transition-all"
                       >
                         Cerrar
