@@ -1183,29 +1183,34 @@ const App = () => {
     const lot = selectedLot;
     const cliente = clientName.trim();
     const asesor = agentName.trim();
-    const isApartada = lot.estado === 'apartada';
+    const telefono = agentPhone.trim();
+    const origin = window.location.origin;
+
+    const saludo = [
+      cliente ? `Hola *${cliente}*` : 'Hola',
+      asesor ? `, soy *${asesor}*, asesor de Mallorca Lifestyle.` : '.',
+    ].join('');
+
     const lines = [
       `🏡 *Mallorca Lifestyle — Metepec*`,
       ``,
-      cliente ? `Hola *${cliente}*, te comparto la cotización del *Lote ${lot.lote}*${isApartada ? ' (apartado, valor de referencia)' : ''}.` : `Te comparto la cotización del *Lote ${lot.lote}*${isApartada ? ' (apartado, valor de referencia)' : ''}.`,
-      `Etapa ${lot.etapa} · Modelo ${toTitle(lot.prototipo)} · Terreno ${lot.m2t} m² · Construcción ${lot.m2c} m²`,
+      `${saludo} Te comparto la cotización de tu casa:`,
       ``,
-      `💰 Precio de lista: *${formatter.format(lot.precio)}*`,
-      `✨ Contado (−7%): *${formatter.format(lot.precio * 0.93)}*`,
-      `🏦 Crédito preventa / comercial (−5%): ${formatter.format(lot.precio * 0.95)}`,
-      `🏊 Equipamiento Casa Club: ${formatter.format(lot.club)}`,
+      `🏠 *Lote ${lot.lote}* · Modelo ${toTitle(lot.prototipo)}`,
+      `📐 Terreno: ${lot.m2t} m²`,
+      `🏗️ Construcción: ${lot.m2c} m²`,
       ``,
-      shareUrl
-        ? `📄 *Descarga tu cotización en PDF:*\n${shareUrl}`
-        : `📄 Te envío la cotización en PDF por este medio.`,
+      `💰 Precio de Lista: *${formatter.format(lot.precio)}*`,
+      `🔑 Enganche Tradicional 20%: *${formatter.format(lot.precio * 0.2)}*`,
       ``,
-      `🔗 Ver el lote en línea: ${window.location.origin}/?lote=${encodeURIComponent(lot.id)}`,
-      `📖 Brochure del desarrollo: ${window.location.origin}/Brochure_Mallorca_1.pdf`,
-      `📅 Lista oficial vigente: 31 de julio de 2026`,
+      shareUrl ? `📄 *Ver cotización en línea:*\n${shareUrl}` : `📄 Te envío la cotización en PDF por este medio.`,
+      ``,
+      `📖 *Brochure:*\n${origin}/Brochure_Mallorca_1.pdf`,
     ];
-    if (asesor || agentPhone) {
-      lines.push(``, `Quedo a tus órdenes,`, [asesor && `*${asesor}*`, 'Asesor Mallorca Lifestyle'].filter(Boolean).join(' · '));
-      if (agentPhone) lines.push(`📞 ${agentPhone}`);
+    if (asesor || telefono) {
+      lines.push(``, `Quedo a tus órdenes,`);
+      if (asesor) lines.push(`*${asesor}*`);
+      if (telefono) lines.push(`📞 ${telefono}`);
     }
 
     // Si no se pudo obtener el enlace, se descarga el PDF para adjuntarlo a mano
