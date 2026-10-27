@@ -491,10 +491,10 @@ const App = () => {
                 </button>
               </div>
               
-              <TransformComponent wrapperClass="!w-full !h-full" contentClass="!w-full !h-full flex items-center justify-center">
+              <TransformComponent wrapperClass="!w-full !h-full touch-none" contentClass="!w-full !h-full flex items-center justify-center touch-none">
                 <div className="w-full h-full flex items-center justify-center pt-16 pb-16 px-2 lg:p-8 lg:pt-16">
                   {/* En móvil se encuadra solo la etapa activa para que los lotes sean legibles y fáciles de tocar */}
-                  <svg viewBox={isMobile ? (activeStage === 1 ? '40 0 485 560' : '330 0 485 560') : '-50 0 1000 600'} preserveAspectRatio="xMidYMid meet" className="w-full h-full text-slate-200 drop-shadow-sm cursor-grab active:cursor-grabbing">
+                  <svg viewBox={isMobile ? (activeStage === 1 ? '40 0 485 560' : '330 0 485 560') : '-50 0 1000 600'} preserveAspectRatio="xMidYMid meet" style={{ touchAction: 'none' }} className="w-full h-full text-slate-200 drop-shadow-sm cursor-grab active:cursor-grabbing touch-none">
                     {(!isMobile || activeStage === 1) && renderStage(1, 100, 80, false)}
                     
                     {/* Center Amenities */}
