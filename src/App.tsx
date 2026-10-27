@@ -353,9 +353,20 @@ const App = () => {
           }}
           onPointerUp={(e) => {
             if (!isClickable) return;
+            const tol = e.pointerType === 'mouse' ? 5 : 16;
             const dx = Math.abs(e.clientX - clickRef.current.x);
             const dy = Math.abs(e.clientY - clickRef.current.y);
-            if (dx < 5 && dy < 5) {
+            if (dx < tol && dy < tol) {
+              if (!inActiveStage) setActiveStage(stage);
+              setSelectedLotId(lotId);
+            }
+          }}
+          onClick={(e) => {
+            // Respaldo para táctil: si pointerup fue cancelado por el pan/zoom, el click sintético aún llega
+            if (!isClickable) return;
+            const dx = Math.abs(e.clientX - clickRef.current.x);
+            const dy = Math.abs(e.clientY - clickRef.current.y);
+            if (dx < 16 && dy < 16) {
               if (!inActiveStage) setActiveStage(stage);
               setSelectedLotId(lotId);
             }
