@@ -1,6 +1,6 @@
 import { list } from '@vercel/blob';
 
-export const config = { runtime: 'edge' };
+// Runtime Node (por defecto): @vercel/blob v2 no es compatible con Edge.
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -16,8 +16,7 @@ const safeEqual = (a: string, b: string) => {
   return diff === 0;
 };
 
-export default async function handler(req: Request) {
-  if (req.method !== 'GET') return json({ error: 'Método no permitido' }, 405);
+export async function GET(req: Request) {
 
   const password = process.env.ADMIN_PASSWORD;
   if (!password) return json({ error: 'Falta configurar ADMIN_PASSWORD en Vercel' }, 503);

@@ -1,6 +1,6 @@
 import { put } from '@vercel/blob';
 
-export const config = { runtime: 'edge' };
+// Runtime Node (por defecto): @vercel/blob v2 no es compatible con Edge.
 
 // Límite de tamaño del PDF (las cotizaciones pesan ~200 KB)
 const MAX_PDF_BYTES = 3 * 1024 * 1024;
@@ -23,8 +23,7 @@ const slugify = (s: string) =>
 
 const clean = (v: unknown, max = 120) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
-export default async function handler(req: Request) {
-  if (req.method !== 'POST') return json({ error: 'Método no permitido' }, 405);
+export async function POST(req: Request) {
 
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     return json({ error: 'Almacenamiento no configurado (falta BLOB_READ_WRITE_TOKEN)' }, 503);
