@@ -1236,7 +1236,7 @@ const App = () => {
               <button onClick={() => setActiveTab('modelos')} className={`flex-1 px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.1em] transition-all ${activeTab === 'modelos' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}>Modelos</button>
             </div>
 
-            <div className="flex flex-nowrap sm:flex-wrap items-center gap-2 overflow-x-auto sm:overflow-visible -mx-6 px-6 sm:mx-0 sm:px-0 pb-1 sm:pb-0 [scrollbar-width:none] [&>*]:shrink-0 [&>*]:whitespace-nowrap">
+            <div className="flex flex-wrap items-center gap-2 [&>span]:whitespace-nowrap">
               <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-widest border border-slate-200">
                 51 Casas en Total
               </span>
@@ -1249,12 +1249,14 @@ const App = () => {
               <span className="bg-slate-100 text-slate-700 text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-widest border border-slate-200">
                 Lista: 31 Jul 2026
               </span>
-              <a href="/Brochure_Mallorca_1.pdf" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-widest border border-indigo-100 hover:bg-indigo-100 transition-colors">
-                <FileText size={12} /> Ver Brochure
-              </a>
-              <a href="/Brochure_Mallorca_1.pdf" download="Brochure_Mallorca.pdf" className="flex items-center gap-1.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-widest border border-indigo-100 hover:bg-indigo-100 transition-colors">
-                <Download size={12} /> Descargar
-              </a>
+              <div className="w-full sm:w-auto grid grid-cols-2 sm:flex gap-2 mt-1 sm:mt-0">
+                <a href="/Brochure_Mallorca_1.pdf" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-1.5 whitespace-nowrap bg-indigo-50 text-indigo-700 text-[10px] font-bold px-3 py-2.5 sm:py-1.5 rounded-full uppercase tracking-widest border border-indigo-100 hover:bg-indigo-100 transition-colors">
+                  <FileText size={12} /> Ver Brochure
+                </a>
+                <a href="/Brochure_Mallorca_1.pdf" download="Brochure_Mallorca.pdf" className="flex items-center justify-center gap-1.5 whitespace-nowrap bg-indigo-50 text-indigo-700 text-[10px] font-bold px-3 py-2.5 sm:py-1.5 rounded-full uppercase tracking-widest border border-indigo-100 hover:bg-indigo-100 transition-colors">
+                  <Download size={12} /> Descargar
+                </a>
+              </div>
             </div>
           </div>
 
