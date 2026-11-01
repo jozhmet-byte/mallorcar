@@ -53,9 +53,9 @@ export interface LotItem {
 }
 
 const MODEL_FEATURES_TEXT: Record<string, string[]> = {
-  'Raquel': ['3 Recámaras c/baño', 'Comedor', 'Sala de TV', '3 Autos', 'Cuarto de Servicio c/baño', 'Jardín con Asador', '½ Baño de visitas', 'Roof Garden', 'Cuarto de lavado', 'Bodega exterior'],
-  'Vanessa': ['3 Recámaras c/baño', 'Comedor', 'Sala', '3 Autos', 'Cuarto de Servicio', 'Jardín con Asador', '½ Baño de visitas', 'Roof Garden', 'Cuarto de lavado'],
-  'Angelina': ['3 Recámaras c/baño', 'Comedor', 'Sala', '3 Autos', 'Estudio', 'Jardín con Asador', '½ Baño de visitas', 'Roof Garden', 'Sala de TV', 'Cuarto de lavado']
+  'Raquel': ['3 Recámaras c/baño', 'Comedor', 'Sala de TV', '3 Autos', 'Cuarto de Servicio c/baño', 'Jardín', '½ Baño de visitas', 'Roof Garden', 'Cuarto de lavado', 'Bodega exterior'],
+  'Vanessa': ['3 Recámaras c/baño', 'Comedor', 'Sala', '3 Autos', 'Cuarto de Servicio', 'Jardín', '½ Baño de visitas', 'Roof Garden', 'Cuarto de lavado'],
+  'Angelina': ['3 Recámaras c/baño', 'Comedor', 'Sala', '3 Autos', 'Estudio', 'Jardín', '½ Baño de visitas', 'Roof Garden', 'Sala de TV', 'Cuarto de lavado']
 };
 
 // Totales oficiales por etapa (incluye vendidas) — Etapa 1: 26, Etapa 2: 25
@@ -180,6 +180,7 @@ const App = () => {
   const [agentName, setAgentName] = useState<string>(savedAgent.name || '');
   const [agentPhone, setAgentPhone] = useState<string>(savedAgent.phone || '');
   const [agentEmail, setAgentEmail] = useState<string>(savedAgent.email || '');
+  const [includeMonthlyPayments, setIncludeMonthlyPayments] = useState<boolean>(savedAgent.includeMonthlyPayments ?? true);
   const [generatedPdfUrl, setGeneratedPdfUrl] = useState<string | null>(null);
   // Enlace público y permanente del PDF en Vercel Blob
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -187,8 +188,8 @@ const App = () => {
   const [shareLinkCopied, setShareLinkCopied] = useState(false);
 
   useEffect(() => {
-    try { localStorage.setItem('mallorca_asesor', JSON.stringify({ name: agentName, phone: agentPhone, email: agentEmail })); } catch { /* sin almacenamiento */ }
-  }, [agentName, agentPhone, agentEmail]);
+    try { localStorage.setItem('mallorca_asesor', JSON.stringify({ name: agentName, phone: agentPhone, email: agentEmail, includeMonthlyPayments })); } catch { /* sin almacenamiento */ }
+  }, [agentName, agentPhone, agentEmail, includeMonthlyPayments]);
   
   const mapContainerRef = useRef<HTMLDivElement>(null);
 
@@ -1364,59 +1365,21 @@ const App = () => {
       ly += 3.7;
     });
 
-    y = midBoxY + midBoxH + 4.5;
+    y = midBoxY + midBoxH + 8;
 
-    // 1. Políticas Oficiales de Descuentos (Official Policy Table)
-    doc.setFontSize(9.5);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(30, 41, 59);
-    doc.text('Políticas Oficiales de Descuentos', 15, y);
-    y += 4.5;
-
-    doc.setFillColor(15, 23, 42);
-    doc.rect(15, y, w - 30, 6, 'F');
-    doc.setFontSize(6.5);
-    doc.setTextColor(255, 255, 255);
-    doc.text('Esquema', 18, y + 4);
-    doc.text('Condición', 52, y + 4);
-    doc.text('Descuento', 112, y + 4);
-    doc.text('Precio Final', 152, y + 4);
-    y += 6;
-
-    const discountRows = [
-      ['Contado', '100% pago en una sola exhibición', '7% (-' + fmt(lot.precio * 0.07) + ')', fmt(lot.precio * 0.93)],
-      ['Crédito Preventa', 'Plan del crédito bancario', '5% (-' + fmt(lot.precio * 0.05) + ')', fmt(lot.precio * 0.95)],
-      ['Comercial', '3 mensualidades directas', '5% (-' + fmt(lot.precio * 0.05) + ')', fmt(lot.precio * 0.95)],
-      ['Tradicional', '20% contrato / 80% escritura', 'Lista de Precio', fmt(lot.precio)],
-    ];
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(6.5);
-    for (let r = 0; r < discountRows.length; r++) {
-      if (r % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(15, y, w - 30, 5, 'F'); }
-      doc.setTextColor(30, 41, 59);
-      doc.text(discountRows[r][0], 18, y + 3.5);
-      doc.text(discountRows[r][1], 52, y + 3.5);
-      doc.text(discountRows[r][2], 112, y + 3.5);
-      doc.text(discountRows[r][3], 152, y + 3.5);
-      y += 5;
-    }
-
-    y += 4;
-
-    // 2. Opciones de Enganche (Esquema Tradicional)
-    doc.setFontSize(9.5);
+    // 1. Opciones de Enganche (Esquema Tradicional)
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(30, 41, 59);
     doc.text('Opciones de Enganche (Esquema Tradicional)', 15, y);
-    y += 4.5;
+    y += 5;
     
     doc.setFillColor(15, 23, 42);
-    doc.rect(15, y, w - 30, 6, 'F');
-    doc.setFontSize(6.5);
+    doc.rect(15, y, w - 30, 6.5, 'F');
+    doc.setFontSize(7.5);
     doc.setTextColor(255, 255, 255);
-    ['Enganche', 'Capital Requerido', 'Monto a Financiar'].forEach((h, i) => doc.text(h, 18 + i * 55, y + 4));
-    y += 6;
+    ['Enganche', 'Capital Requerido', 'Monto a Financiar'].forEach((h, i) => doc.text(h, 18 + i * 55, y + 4.5));
+    y += 6.5;
     
     const dpData = [
       ['20%', fmt(lot.precio * 0.2), fmt(principal20)],
@@ -1425,49 +1388,53 @@ const App = () => {
     ];
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(6.5);
+    doc.setFontSize(7.5);
     for (let r = 0; r < 3; r++) {
-      if (r % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(15, y, w - 30, 5, 'F'); }
+      if (r % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(15, y, w - 30, 6, 'F'); }
       doc.setTextColor(30, 41, 59);
-      dpData[r].forEach((cell, ci) => doc.text(cell, 18 + ci * 55, y + 3.5));
-      y += 5;
+      dpData[r].forEach((cell, ci) => doc.text(cell, 18 + ci * 55, y + 4.2));
+      y += 6;
     }
     
-    y += 4;
+    y += 6;
 
-    // 3. Mensualidades Estimadas (Informativo)
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(116, 145, 171);
-    doc.text('Mensualidades Estimadas (Tasa Anual 11% - Informativo)', 15, y);
-    y += 4;
-    
-    doc.setFillColor(241, 245, 249);
-    doc.rect(15, y, w - 30, 5.5, 'F');
-    doc.setFontSize(6);
-    doc.setTextColor(148, 163, 184);
-    ['Enganche', '10 Años', '15 Años', '20 Años'].forEach((h, i) => doc.text(h, 18 + i * 45, y + 3.8));
-    y += 5.5;
-    
-    const mData = [
-      ['20%', fmt(calc(principal20, 120)), fmt(calc(principal20, 180)), fmt(calc(principal20, 240))],
-      ['30%', fmt(calc(principal30, 120)), fmt(calc(principal30, 180)), fmt(calc(principal30, 240))],
-      ['50%', fmt(calc(principal50, 120)), fmt(calc(principal50, 180)), fmt(calc(principal50, 240))],
-    ];
-
-    doc.setFont('helvetica', 'normal');
-    for (let r = 0; r < 3; r++) {
-      doc.setTextColor(148, 163, 184);
-      mData[r].forEach((cell, ci) => doc.text(cell, 18 + ci * 45, y + 3.5));
+    // 2. Mensualidades Estimadas (Informativo, opcional)
+    if (includeMonthlyPayments) {
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(100, 116, 139);
+      doc.text('Mensualidades Estimadas (Tasa Anual 11% - Informativo)', 15, y);
       y += 4.5;
+      
+      doc.setFillColor(241, 245, 249);
+      doc.rect(15, y, w - 30, 6, 'F');
+      doc.setFontSize(7);
+      doc.setTextColor(100, 116, 139);
+      ['Enganche', '10 Años', '15 Años', '20 Años'].forEach((h, i) => doc.text(h, 18 + i * 45, y + 4.2));
+      y += 6;
+      
+      const mData = [
+        ['20%', fmt(calc(principal20, 120)), fmt(calc(principal20, 180)), fmt(calc(principal20, 240))],
+        ['30%', fmt(calc(principal30, 120)), fmt(calc(principal30, 180)), fmt(calc(principal30, 240))],
+        ['50%', fmt(calc(principal50, 120)), fmt(calc(principal50, 180)), fmt(calc(principal50, 240))],
+      ];
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      for (let r = 0; r < 3; r++) {
+        if (r % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(15, y, w - 30, 5.5, 'F'); }
+        doc.setTextColor(100, 116, 139);
+        mData[r].forEach((cell, ci) => doc.text(cell, 18 + ci * 45, y + 3.9));
+        y += 5.5;
+      }
+      y += 4;
     }
-    y += 2;
 
     // Bottom extra info
-    doc.setFontSize(6.5);
+    doc.setFontSize(7);
     doc.setTextColor(100, 116, 139);
     doc.text(`Cuota Equipamiento Casa Club: ${fmt(lot.club)} (no incluida en el precio de lista).`, 15, y);
-    doc.text('Precios y políticas conforme a la lista oficial vigente del 31 de Julio del 2026. Sujetos a cambios sin previo aviso.', 15, y + 4);
+    doc.text('Precios conforme a la lista oficial vigente del 31 de Julio del 2026. Sujetos a cambios sin previo aviso.', 15, y + 4.5);
 
     // Footer
     doc.setFillColor(15, 23, 42);
@@ -2154,6 +2121,30 @@ const App = () => {
                               className="w-full pl-10 pr-3 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
                             />
                           </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Optional PDF Sections */}
+                    <div className="border-t border-slate-100 pt-4">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2.5">Contenido de la Cotización</span>
+                      <div className="flex items-start gap-3 p-3.5 rounded-xl bg-slate-50 border border-slate-200 hover:border-slate-300 transition-colors">
+                        <input
+                          id="include-monthly-payments"
+                          name="includeMonthlyPayments"
+                          type="checkbox"
+                          checked={includeMonthlyPayments}
+                          onChange={(e) => setIncludeMonthlyPayments(e.target.checked)}
+                          aria-describedby="include-monthly-payments-help"
+                          className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 accent-indigo-600 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                        />
+                        <div className="flex flex-col min-w-0">
+                          <label htmlFor="include-monthly-payments" className="text-xs font-bold text-slate-800 cursor-pointer select-none leading-snug">
+                            Incluir mensualidades estimadas
+                          </label>
+                          <span id="include-monthly-payments-help" className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                            Muestra en el PDF la tabla informativa a 10, 15 y 20 años (tasa 11% anual). Desmárcala si prefieres omitirla.
+                          </span>
                         </div>
                       </div>
                     </div>
