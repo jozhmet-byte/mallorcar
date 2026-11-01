@@ -55,7 +55,7 @@ export interface LotItem {
 const MODEL_FEATURES_TEXT: Record<string, string[]> = {
   'Raquel': ['3 Recámaras c/baño', 'Comedor', 'Sala de TV', '3 Autos', 'Cuarto de Servicio c/baño', 'Jardín', '½ Baño de visitas', 'Roof Garden', 'Cuarto de lavado', 'Bodega exterior'],
   'Vanessa': ['3 Recámaras c/baño', 'Comedor', 'Sala', '3 Autos', 'Cuarto de Servicio', 'Jardín', '½ Baño de visitas', 'Roof Garden', 'Cuarto de lavado'],
-  'Angelina': ['3 Recámaras c/baño', 'Comedor', 'Sala', '3 Autos', 'Estudio', 'Jardín', '½ Baño de visitas', 'Roof Garden', 'Sala de TV', 'Cuarto de lavado']
+  'Angelina': ['3 Recámaras c/baño', 'Comedor', 'Sala', '3 Autos', 'Estudio', 'Jardín', 'Baño completo en planta baja', 'Roof Garden', 'Sala de TV', 'Cuarto de lavado']
 };
 
 // Totales oficiales por etapa (incluye vendidas) — Etapa 1: 26, Etapa 2: 25
