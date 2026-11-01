@@ -180,6 +180,7 @@ const App = () => {
   const [agentName, setAgentName] = useState<string>(savedAgent.name || '');
   const [agentPhone, setAgentPhone] = useState<string>(savedAgent.phone || '');
   const [agentEmail, setAgentEmail] = useState<string>(savedAgent.email || '');
+  const [include10PctDownPayment, setInclude10PctDownPayment] = useState<boolean>(savedAgent.include10PctDownPayment ?? true);
   const [includeMonthlyPayments, setIncludeMonthlyPayments] = useState<boolean>(savedAgent.includeMonthlyPayments ?? true);
   const [generatedPdfUrl, setGeneratedPdfUrl] = useState<string | null>(null);
   // Enlace público y permanente del PDF en Vercel Blob
@@ -188,8 +189,8 @@ const App = () => {
   const [shareLinkCopied, setShareLinkCopied] = useState(false);
 
   useEffect(() => {
-    try { localStorage.setItem('mallorca_asesor', JSON.stringify({ name: agentName, phone: agentPhone, email: agentEmail, includeMonthlyPayments })); } catch { /* sin almacenamiento */ }
-  }, [agentName, agentPhone, agentEmail, includeMonthlyPayments]);
+    try { localStorage.setItem('mallorca_asesor', JSON.stringify({ name: agentName, phone: agentPhone, email: agentEmail, include10PctDownPayment, includeMonthlyPayments })); } catch { /* sin almacenamiento */ }
+  }, [agentName, agentPhone, agentEmail, include10PctDownPayment, includeMonthlyPayments]);
   
   const mapContainerRef = useRef<HTMLDivElement>(null);
 
@@ -952,6 +953,7 @@ const App = () => {
     const w = doc.internal.pageSize.getWidth();
     const lot = selectedLot;
     const rate = 0.11 / 12;
+    const principal10 = lot.precio * 0.9;
     const principal20 = lot.precio * 0.8;
     const principal30 = lot.precio * 0.7;
     const principal50 = lot.precio * 0.5;
@@ -1382,6 +1384,7 @@ const App = () => {
     y += 6.5;
     
     const dpData = [
+      ...(include10PctDownPayment ? [['10%', fmt(lot.precio * 0.1), fmt(principal10)]] : []),
       ['20%', fmt(lot.precio * 0.2), fmt(principal20)],
       ['30%', fmt(lot.precio * 0.3), fmt(principal30)],
       ['50%', fmt(lot.precio * 0.5), fmt(principal50)],
@@ -1389,14 +1392,14 @@ const App = () => {
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
-    for (let r = 0; r < 3; r++) {
-      if (r % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(15, y, w - 30, 6, 'F'); }
+    for (let r = 0; r < dpData.length; r++) {
+      if (r % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(15, y, w - 30, 5.8, 'F'); }
       doc.setTextColor(30, 41, 59);
-      dpData[r].forEach((cell, ci) => doc.text(cell, 18 + ci * 55, y + 4.2));
-      y += 6;
+      dpData[r].forEach((cell, ci) => doc.text(cell, 18 + ci * 55, y + 4));
+      y += 5.8;
     }
     
-    y += 6;
+    y += 5;
 
     // 2. Mensualidades Estimadas (Informativo, opcional)
     if (includeMonthlyPayments) {
@@ -1414,6 +1417,7 @@ const App = () => {
       y += 6;
       
       const mData = [
+        ...(include10PctDownPayment ? [['10%', fmt(calc(principal10, 120)), fmt(calc(principal10, 180)), fmt(calc(principal10, 240))]] : []),
         ['20%', fmt(calc(principal20, 120)), fmt(calc(principal20, 180)), fmt(calc(principal20, 240))],
         ['30%', fmt(calc(principal30, 120)), fmt(calc(principal30, 180)), fmt(calc(principal30, 240))],
         ['50%', fmt(calc(principal50, 120)), fmt(calc(principal50, 180)), fmt(calc(principal50, 240))],
@@ -1421,13 +1425,13 @@ const App = () => {
 
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(7);
-      for (let r = 0; r < 3; r++) {
-        if (r % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(15, y, w - 30, 5.5, 'F'); }
+      for (let r = 0; r < mData.length; r++) {
+        if (r % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(15, y, w - 30, 5.2, 'F'); }
         doc.setTextColor(100, 116, 139);
-        mData[r].forEach((cell, ci) => doc.text(cell, 18 + ci * 45, y + 3.9));
-        y += 5.5;
+        mData[r].forEach((cell, ci) => doc.text(cell, 18 + ci * 45, y + 3.7));
+        y += 5.2;
       }
-      y += 4;
+      y += 3.5;
     }
 
     // Bottom extra info
@@ -2128,23 +2132,45 @@ const App = () => {
                     {/* Optional PDF Sections */}
                     <div className="border-t border-slate-100 pt-4">
                       <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2.5">Contenido de la Cotización</span>
-                      <div className="flex items-start gap-3 p-3.5 rounded-xl bg-slate-50 border border-slate-200 hover:border-slate-300 transition-colors">
-                        <input
-                          id="include-monthly-payments"
-                          name="includeMonthlyPayments"
-                          type="checkbox"
-                          checked={includeMonthlyPayments}
-                          onChange={(e) => setIncludeMonthlyPayments(e.target.checked)}
-                          aria-describedby="include-monthly-payments-help"
-                          className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 accent-indigo-600 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                        />
-                        <div className="flex flex-col min-w-0">
-                          <label htmlFor="include-monthly-payments" className="text-xs font-bold text-slate-800 cursor-pointer select-none leading-snug">
-                            Incluir mensualidades estimadas
-                          </label>
-                          <span id="include-monthly-payments-help" className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-                            Muestra en el PDF la tabla informativa a 10, 15 y 20 años (tasa 11% anual). Desmárcala si prefieres omitirla.
-                          </span>
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200 hover:border-slate-300 transition-colors">
+                          <input
+                            id="include-10pct-downpayment"
+                            name="include10PctDownPayment"
+                            type="checkbox"
+                            checked={include10PctDownPayment}
+                            onChange={(e) => setInclude10PctDownPayment(e.target.checked)}
+                            aria-describedby="include-10pct-downpayment-help"
+                            className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 accent-indigo-600 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                          />
+                          <div className="flex flex-col min-w-0">
+                            <label htmlFor="include-10pct-downpayment" className="text-xs font-bold text-slate-800 cursor-pointer select-none leading-snug">
+                              Incluir opción de 10% de enganche
+                            </label>
+                            <span id="include-10pct-downpayment-help" className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                              Agrega la fila del 10% ({formatter.format(selectedLot.precio * 0.1)}) junto a las de 20%, 30% y 50% en el PDF.
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200 hover:border-slate-300 transition-colors">
+                          <input
+                            id="include-monthly-payments"
+                            name="includeMonthlyPayments"
+                            type="checkbox"
+                            checked={includeMonthlyPayments}
+                            onChange={(e) => setIncludeMonthlyPayments(e.target.checked)}
+                            aria-describedby="include-monthly-payments-help"
+                            className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 accent-indigo-600 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                          />
+                          <div className="flex flex-col min-w-0">
+                            <label htmlFor="include-monthly-payments" className="text-xs font-bold text-slate-800 cursor-pointer select-none leading-snug">
+                              Incluir mensualidades estimadas
+                            </label>
+                            <span id="include-monthly-payments-help" className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                              Muestra en el PDF la tabla informativa a 10, 15 y 20 años (tasa 11% anual). Desmárcala si prefieres omitirla.
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
