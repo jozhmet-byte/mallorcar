@@ -1082,11 +1082,15 @@ const App = () => {
     doc.setFontSize(15.5);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(30, 41, 59);
-    doc.text(fmt(lot.precio), w - 20, y + 11.5, { align: 'right' });
-    doc.setFontSize(7.5);
+    doc.text(fmt(lot.precio), w - 20, y + 10.5, { align: 'right' });
+    doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 116, 139);
-    doc.text(lot.estado === 'apartada' ? 'VALOR DE LISTA (APARTADA)' : 'PRECIO DE LISTA', w - 20, y + 18, { align: 'right' });
+    doc.text(lot.estado === 'apartada' ? 'VALOR DE LISTA (APARTADA)' : 'PRECIO DE LISTA', w - 20, y + 16, { align: 'right' });
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(5, 150, 105);
+    doc.text('Se aparta con $100,000 MXN', w - 20, y + 22.5, { align: 'right' });
     y += 32;
 
     // Middle Row: House Model Features (Left) + Location on Master Plan with Casa Club Reference (Right)
@@ -1367,7 +1371,21 @@ const App = () => {
       ly += 3.7;
     });
 
-    y = midBoxY + midBoxH + 8;
+    y = midBoxY + midBoxH + 5;
+
+    // Apartado highlight banner
+    doc.setFillColor(236, 253, 245);
+    doc.setDrawColor(167, 243, 208);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(15, y, w - 30, 8.5, 2, 2, 'FD');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(6, 95, 70);
+    doc.text('APARTADO DE PROPIEDAD', 20, y + 5.6);
+    doc.setFontSize(8.5);
+    doc.setTextColor(5, 150, 105);
+    doc.text('Se aparta con $100,000 MXN', w - 20, y + 5.6, { align: 'right' });
+    y += 14;
 
     // 1. Opciones de Enganche (Esquema Tradicional)
     doc.setFontSize(10);
@@ -1532,6 +1550,7 @@ const App = () => {
       `🏗️ Construcción: ${lot.m2c} m²`,
       ``,
       `💰 Precio de Lista: *${formatter.format(lot.precio)}*`,
+      `✨ Apartado: *Se aparta con $100,000 MXN*`,
       `🔑 Enganche Tradicional ${Math.round(downPaymentPct * 100)}%: *${formatter.format(lot.precio * downPaymentPct)}*`,
       ``,
       shareUrl ? `📄 *Ver cotización en línea:*\n${shareUrl}` : `📄 Te envío la cotización en PDF por este medio.`,
