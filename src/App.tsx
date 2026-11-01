@@ -70,6 +70,7 @@ const LOT_COLORS = {
 };
 
 const ANNUAL_RATE = 0.11;
+const APARTADO_MXN = 100_000;
 
 const monthlyPayment = (price: number, downPct: number, years: number) => {
   const rate = ANNUAL_RATE / 12;
@@ -785,9 +786,19 @@ const App = () => {
               ))}
             </div>
 
-            <div className="flex justify-between items-end px-3 py-2 border-b-2 border-indigo-100 mb-3">
-               <span className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Capital Requerido</span>
-               <span className="text-2xl font-black text-indigo-900 tracking-tight">{formatter.format(selectedLot.precio * downPaymentPct)}</span>
+            <div className="rounded-2xl bg-slate-50 border border-indigo-100 p-3.5 mb-3 flex flex-col gap-1.5">
+               <div className="flex justify-between items-center text-xs">
+                 <span className="text-slate-500 font-semibold">Enganche Total ({Math.round(downPaymentPct * 100)}%)</span>
+                 <span className="font-bold text-slate-800">{formatter.format(selectedLot.precio * downPaymentPct)}</span>
+               </div>
+               <div className="flex justify-between items-center text-xs">
+                 <span className="text-emerald-700 font-semibold">Apartado (a cuenta de enganche)</span>
+                 <span className="font-bold text-emerald-700">−{formatter.format(APARTADO_MXN)}</span>
+               </div>
+               <div className="border-t border-indigo-100 pt-2 mt-0.5 flex justify-between items-baseline">
+                 <span className="text-[11px] text-indigo-950 font-black uppercase tracking-wider">Restante de Enganche</span>
+                 <span className="text-xl font-black text-indigo-900 tracking-tight">{formatter.format(selectedLot.precio * downPaymentPct - APARTADO_MXN)}</span>
+               </div>
             </div>
 
             {/* Emulación de Mensualidad */}
@@ -1087,10 +1098,10 @@ const App = () => {
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 116, 139);
     doc.text(lot.estado === 'apartada' ? 'VALOR DE LISTA (APARTADA)' : 'PRECIO DE LISTA', w - 20, y + 16, { align: 'right' });
-    doc.setFontSize(8);
+    doc.setFontSize(7.5);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(5, 150, 105);
-    doc.text('Se aparta con $100,000 MXN', w - 20, y + 22.5, { align: 'right' });
+    doc.text('Se aparta con $100,000 MXN (a cuenta de enganche)', w - 20, y + 22.5, { align: 'right' });
     y += 32;
 
     // Middle Row: House Model Features (Left) + Location on Master Plan with Casa Club Reference (Right)
@@ -1382,9 +1393,9 @@ const App = () => {
     doc.setFontSize(8);
     doc.setTextColor(6, 95, 70);
     doc.text('APARTADO DE PROPIEDAD', 20, y + 5.6);
-    doc.setFontSize(8.5);
+    doc.setFontSize(8);
     doc.setTextColor(5, 150, 105);
-    doc.text('Se aparta con $100,000 MXN', w - 20, y + 5.6, { align: 'right' });
+    doc.text('Se aparta con $100,000 MXN (se toman a cuenta del enganche)', w - 20, y + 5.6, { align: 'right' });
     y += 14;
 
     // 1. Opciones de Enganche (Esquema Tradicional)
@@ -1394,26 +1405,35 @@ const App = () => {
     doc.text('Opciones de Enganche (Esquema Tradicional)', 15, y);
     y += 5;
     
+    const dpColX = [18, 44, 92, 152];
     doc.setFillColor(15, 23, 42);
     doc.rect(15, y, w - 30, 6.5, 'F');
-    doc.setFontSize(7.5);
+    doc.setFontSize(7);
     doc.setTextColor(255, 255, 255);
-    ['Enganche', 'Capital Requerido', 'Monto a Financiar'].forEach((h, i) => doc.text(h, 18 + i * 55, y + 4.5));
+    ['Enganche', 'Enganche Total', 'Restante a Contrato (−$100k apartado)', 'Monto a Financiar'].forEach((h, i) => doc.text(h, dpColX[i], y + 4.5));
     y += 6.5;
     
     const dpData = [
-      ...(include10PctDownPayment ? [['10%', fmt(lot.precio * 0.1), fmt(principal10)]] : []),
-      ['20%', fmt(lot.precio * 0.2), fmt(principal20)],
-      ['30%', fmt(lot.precio * 0.3), fmt(principal30)],
-      ['50%', fmt(lot.precio * 0.5), fmt(principal50)],
+      ...(include10PctDownPayment ? [['10%', fmt(lot.precio * 0.1), fmt(lot.precio * 0.1 - APARTADO_MXN), fmt(principal10)]] : []),
+      ['20%', fmt(lot.precio * 0.2), fmt(lot.precio * 0.2 - APARTADO_MXN), fmt(principal20)],
+      ['30%', fmt(lot.precio * 0.3), fmt(lot.precio * 0.3 - APARTADO_MXN), fmt(principal30)],
+      ['50%', fmt(lot.precio * 0.5), fmt(lot.precio * 0.5 - APARTADO_MXN), fmt(principal50)],
     ];
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
     for (let r = 0; r < dpData.length; r++) {
       if (r % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(15, y, w - 30, 5.8, 'F'); }
-      doc.setTextColor(30, 41, 59);
-      dpData[r].forEach((cell, ci) => doc.text(cell, 18 + ci * 55, y + 4));
+      dpData[r].forEach((cell, ci) => {
+        if (ci === 2) {
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(6, 95, 70);
+        } else {
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(30, 41, 59);
+        }
+        doc.text(cell, dpColX[ci], y + 4);
+      });
       y += 5.8;
     }
     
@@ -1550,8 +1570,9 @@ const App = () => {
       `🏗️ Construcción: ${lot.m2c} m²`,
       ``,
       `💰 Precio de Lista: *${formatter.format(lot.precio)}*`,
-      `✨ Apartado: *Se aparta con $100,000 MXN*`,
-      `🔑 Enganche Tradicional ${Math.round(downPaymentPct * 100)}%: *${formatter.format(lot.precio * downPaymentPct)}*`,
+      `✨ Apartado: *$100,000 MXN* _(se toman a cuenta del enganche)_`,
+      `🔑 Enganche Total (${Math.round(downPaymentPct * 100)}%): *${formatter.format(lot.precio * downPaymentPct)}*`,
+      `📝 Restante de Enganche (descontando apartado): *${formatter.format(lot.precio * downPaymentPct - APARTADO_MXN)}*`,
       ``,
       shareUrl ? `📄 *Ver cotización en línea:*\n${shareUrl}` : `📄 Te envío la cotización en PDF por este medio.`,
       ``,
@@ -2167,7 +2188,7 @@ const App = () => {
                               Incluir opción de 10% de enganche
                             </label>
                             <span id="include-10pct-downpayment-help" className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-                              Agrega la fila del 10% ({formatter.format(selectedLot.precio * 0.1)}) junto a las de 20%, 30% y 50% en el PDF.
+                              Agrega la fila del 10% ({formatter.format(selectedLot.precio * 0.1)} total · {formatter.format(selectedLot.precio * 0.1 - APARTADO_MXN)} restante tras apartado) en el PDF.
                             </span>
                           </div>
                         </div>
