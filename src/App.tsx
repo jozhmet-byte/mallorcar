@@ -82,6 +82,53 @@ const formatShortMXN = (n: number) => `$${(n / 1_000_000).toFixed(1)}M`;
 
 const toTitle = (s: string) => s.charAt(0) + s.slice(1).toLowerCase();
 
+interface StageLotRect {
+  loteNum: string;
+  lotId: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+const getStageLotRects = (stage: number): StageLotRect[] => {
+  const offsetX = stage === 1 ? 100 : 800;
+  const offsetY = 80;
+  const mirrored = stage === 2;
+  const getX = (localX: number, w: number) => (mirrored ? offsetX - localX - w : offsetX + localX);
+  const toId = (num: string) => (stage === 1 ? num : `E2-${num}`);
+  const rects: StageLotRect[] = [];
+
+  for (let i = 1; i <= 9; i++) {
+    const num = i.toString();
+    rects.push({ loteNum: num, lotId: toId(num), x: getX(0, 50), y: offsetY + (i - 1) * 40, w: 50, h: 35 });
+  }
+  for (let i = 0; i < 6; i++) {
+    const num = (26 - i).toString();
+    if (stage === 2 && num === '26') continue;
+    rects.push({ loteNum: num, lotId: toId(num), x: getX(80, 65), y: offsetY + 40 + i * 40, w: 65, h: 35 });
+  }
+  for (let i = 0; i < 4; i++) {
+    const num = (20 - i).toString();
+    rects.push({ loteNum: num, lotId: toId(num), x: getX(85 + i * 48, 42), y: offsetY + 293, w: 42, h: 55 });
+  }
+  for (let i = 0; i < 7; i++) {
+    const num = (10 + i).toString();
+    rects.push({ loteNum: num, lotId: toId(num), x: getX(i * 48, 45), y: offsetY + 400, w: 45, h: 65 });
+  }
+  return rects;
+};
+
+const getClubReferenceText = (lot: LotItem): string => {
+  const num = parseInt(lot.lote.replace(/^E\d+-/, ''), 10);
+  if (num >= 21 && num <= 26) return 'Frente a Casa Club';
+  if (num >= 17 && num <= 20) return 'Costado sur de Casa Club';
+  if (num >= 1 && num <= 4) return 'Sector norte · Acceso a Casa Club';
+  if (num >= 5 && num <= 9) return 'Corredor oriente · Frente a isla central';
+  if (num >= 14 && num <= 16) return 'Sector sur · Cercano a Casa Club';
+  return 'Corredor sur del desarrollo';
+};
+
 const App = () => {
   // El lote seleccionado vive en la URL (?lote=E2-17): permite compartir enlaces
   // y que el botón "Atrás" del navegador/celular cierre la ficha en lugar de salir del sitio.
@@ -540,6 +587,7 @@ const App = () => {
           <g key={`mini-${lotId}`}>
             <rect x={x - 9} y={y - 9} width={w + 18} height={h + 18} rx="10" fill="none" stroke="#6366f1" strokeWidth="5" className="animate-pulse" />
             <rect x={x} y={y} width={w} height={h} rx="4" fill={LOT_COLORS.seleccionado.fill} />
+            <text x={x + w / 2} y={y + h / 2 + 4} textAnchor="middle" fontSize="12" fontWeight="bold" fill="#ffffff" stroke="none" className="font-sans select-none">{loteNum}</text>
           </g>
         );
       }
@@ -841,24 +889,33 @@ const App = () => {
 
           {/* Location Minimap */}
           <div className="w-full bg-slate-50/80 rounded-[1.5rem] border border-slate-100 p-4 mb-2 flex flex-col relative overflow-hidden">
-             <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5 mb-3 z-10 relative">
-               <MapIcon size={14} className="text-indigo-500" /> Ubicación en el Master Plan
+             <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center justify-between gap-1.5 mb-3 z-10 relative">
+               <span className="flex items-center gap-1.5"><MapIcon size={14} className="text-indigo-500" /> Ubicación en el Master Plan</span>
+               <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">Ref: Casa Club</span>
              </div>
-             <div className="relative w-full h-40 lg:h-44 flex items-center justify-center rounded-xl overflow-hidden bg-white/60 border border-slate-100">
+             <div className="relative w-full h-44 lg:h-48 flex items-center justify-center rounded-xl overflow-hidden bg-white/60 border border-slate-100">
                <svg 
-                 viewBox={selectedLot.etapa === 1 ? "90 60 360 500" : "450 60 360 500"} 
+                 viewBox={selectedLot.etapa === 1 ? "80 60 455 500" : "365 60 455 500"} 
                  className="w-full h-full stroke-slate-200 transition-all duration-700 ease-in-out"
                >
                   {renderMiniStage(1, 100, 80, false)}
                   <path d="M110,80 L110,530" stroke="currentColor" strokeWidth="8" strokeDasharray="1 15" strokeLinecap="round" className="text-slate-200" opacity="0.6" />
                   <g transform="translate(450, 280)">
-                    <rect x="-70" y="-50" width="140" height="100" rx="16" fill="#ffffff" />
+                    <rect x="-70" y="-50" width="140" height="100" rx="16" fill="#ecfdf5" stroke="#10b981" strokeWidth="2.5" />
+                    <rect x="-60" y="-40" width="120" height="80" rx="12" fill="transparent" stroke="#6ee7b7" strokeWidth="1.5" strokeDasharray="6 6" />
+                    <TreePine x="-14" y="-28" width="28" height="28" className="text-emerald-600" />
+                    <text x="0" y="18" textAnchor="middle" fill="#065f46" fontSize="11" fontWeight="800" stroke="none" className="uppercase tracking-[0.18em] font-sans">Casa Club</text>
+                    <text x="0" y="31" textAnchor="middle" fill="#059669" fontSize="8" fontWeight="700" stroke="none" className="uppercase tracking-[0.15em] font-sans">Referencia</text>
                   </g>
                   {renderMiniStage(2, 800, 80, true)}
                   <path d="M790,80 L790,530" stroke="currentColor" strokeWidth="8" strokeDasharray="1 15" strokeLinecap="round" className="text-slate-200" opacity="0.6" />
                </svg>
-               <div className="absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-slate-50/80 to-transparent pointer-events-none"></div>
-               <div className="absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-slate-50/80 to-transparent pointer-events-none"></div>
+               <div className="absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-slate-50/80 to-transparent pointer-events-none"></div>
+               <div className="absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-slate-50/80 to-transparent pointer-events-none"></div>
+             </div>
+             <div className="mt-2.5 flex items-center justify-between text-[10px] text-slate-500 px-1">
+               <span className="font-semibold text-slate-700">Lote {selectedLot.lote} · Etapa {selectedLot.etapa}</span>
+               <span className="font-medium text-emerald-700">{getClubReferenceText(selectedLot)}</span>
              </div>
           </div>
           </div>
@@ -915,7 +972,7 @@ const App = () => {
     } catch { /* continue without image */ }
 
     // Header with image or solid color
-    const headerH = heroImg ? 48 : 38;
+    const headerH = heroImg ? 44 : 36;
     if (heroImg) {
       doc.addImage(heroImg, 'JPEG', 0, 0, w, headerH, undefined, 'FAST');
       doc.setFillColor(15, 23, 42);
@@ -926,7 +983,7 @@ const App = () => {
       doc.setFillColor(15, 23, 42);
       doc.rect(0, 0, w, headerH, 'F');
     }
-    const tOff = heroImg ? 4 : 0;
+    const tOff = heroImg ? 2 : 0;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(22);
     doc.setTextColor(255, 255, 255);
@@ -939,92 +996,375 @@ const App = () => {
     doc.text('San Salvador Tizatlalli, Metepec, Estado de México', 15, 29 + tOff);
     doc.setFontSize(7);
     doc.text(`Cotización generada: ${today}`, w - 15, 33 + tOff, { align: 'right' });
-    y = headerH + 8;
+    y = headerH + 6;
 
-    // Client name
+    // Client & Agent info (side-by-side when advisor data is present to preserve single-page layout)
+    const hasAgent = Boolean(agentName || agentPhone || agentEmail);
     doc.setTextColor(30, 41, 59);
-    if (name) {
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.text('COTIZACIÓN PERSONALIZADA PARA:', 15, y);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(16);
-      doc.text(name, 15, y + 8);
-      y += 20;
-    } else {
-      doc.setFontSize(10);
-      doc.text('COTIZACIÓN GENERAL', 15, y);
-      y += 10;
-    }
-
-    // Agent info
-    if (agentName || agentPhone || agentEmail) {
+    if (hasAgent) {
+      if (name) {
+        doc.setFontSize(8.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 116, 139);
+        doc.text('COTIZACIÓN PERSONALIZADA PARA:', 15, y + 4.5);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(14);
+        doc.setTextColor(30, 41, 59);
+        doc.text(doc.splitTextToSize(name, 90)[0] || name, 15, y + 12);
+      } else {
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(30, 41, 59);
+        doc.text('COTIZACIÓN GENERAL', 15, y + 10);
+      }
       doc.setDrawColor(226, 232, 240);
       doc.setFillColor(248, 250, 252);
-      const agentLines = [agentName, agentPhone, agentEmail].filter(Boolean);
-      const agentH = 8 + agentLines.length * 4.5;
-      doc.roundedRect(15, y, w - 30, agentH, 2, 2, 'FD');
-      doc.setFontSize(7);
+      const agentBoxX = 110;
+      const agentBoxW = w - 15 - agentBoxX;
+      const agentBoxH = 18;
+      doc.roundedRect(agentBoxX, y - 1, agentBoxW, agentBoxH, 2, 2, 'FD');
+      doc.setFontSize(6.5);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(100, 116, 139);
-      doc.text('ASESOR INMOBILIARIO', 22, y + 5);
+      doc.text('ASESOR INMOBILIARIO', agentBoxX + 4, y + 3.5);
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
+      doc.setFontSize(7.5);
       doc.setTextColor(30, 41, 59);
-      let ay = y + 10;
-      if (agentName) { doc.text(agentName, 22, ay); ay += 4.5; }
-      if (agentPhone) { doc.text(`Tel: ${agentPhone}`, 22, ay); ay += 4.5; }
-      if (agentEmail) { doc.text(agentEmail, 22, ay); }
-      y += agentH + 6;
+      let ay = y + 8;
+      if (agentName) {
+        doc.setFont('helvetica', 'bold');
+        doc.text(agentName, agentBoxX + 4, ay);
+        doc.setFont('helvetica', 'normal');
+        ay += 4;
+      }
+      const contactLine = [agentPhone ? `Tel: ${agentPhone}` : '', agentEmail].filter(Boolean).join('  ·  ');
+      if (contactLine) {
+        doc.setFontSize(7);
+        doc.setTextColor(71, 85, 105);
+        doc.text(doc.splitTextToSize(contactLine, agentBoxW - 8)[0] || contactLine, agentBoxX + 4, ay);
+      }
+      y += 20;
+    } else if (name) {
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 116, 139);
+      doc.text('COTIZACIÓN PERSONALIZADA PARA:', 15, y + 3);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(15);
+      doc.setTextColor(30, 41, 59);
+      doc.text(name, 15, y + 10);
+      y += 15;
+    } else {
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text('COTIZACIÓN GENERAL', 15, y + 4);
+      y += 9;
     }
 
     // Lot info section
     doc.setDrawColor(226, 232, 240);
     doc.setFillColor(248, 250, 252);
-    doc.roundedRect(15, y, w - 30, 36, 3, 3, 'FD');
-    doc.setFontSize(18);
+    doc.roundedRect(15, y, w - 30, 28, 3, 3, 'FD');
+    doc.setFontSize(16.5);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(30, 41, 59);
-    doc.text(`Lote ${lot.lote} ${lot.estado === 'apartada' ? '(APARTADA)' : ''}`, 22, y + 11);
+    doc.text(`Lote ${lot.lote} ${lot.estado === 'apartada' ? '(APARTADA)' : ''}`, 22, y + 9.5);
     doc.setFontSize(8.5);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 116, 139);
-    doc.text(`Etapa ${lot.etapa}  ·  Prototipo ${lot.prototipo}  ·  Lista: 31 Julio 2026`, 22, y + 18);
+    doc.text(`Etapa ${lot.etapa}  ·  Prototipo ${lot.prototipo}  ·  Lista: 31 Julio 2026`, 22, y + 16);
     const terrText = lot.m2Exc ? `Terreno: ${lot.m2t} m² (Base 180 m² + ${lot.m2Exc} m² exc)  ·  Construcción: ${lot.m2c} m²` : `Terreno: ${lot.m2t} m²  ·  Construcción: ${lot.m2c} m²`;
-    doc.text(terrText, 22, y + 25);
+    doc.text(terrText, 22, y + 22.5);
     // Price on right
-    doc.setFontSize(16);
+    doc.setFontSize(15.5);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(30, 41, 59);
-    doc.text(fmt(lot.precio), w - 20, y + 13, { align: 'right' });
+    doc.text(fmt(lot.precio), w - 20, y + 11.5, { align: 'right' });
     doc.setFontSize(7.5);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 116, 139);
-    doc.text(lot.estado === 'apartada' ? 'VALOR DE LISTA (APARTADA)' : 'PRECIO DE LISTA', w - 20, y + 20, { align: 'right' });
-    y += 40;
+    doc.text(lot.estado === 'apartada' ? 'VALOR DE LISTA (APARTADA)' : 'PRECIO DE LISTA', w - 20, y + 18, { align: 'right' });
+    y += 32;
 
-    // House Model Features
+    // Middle Row: House Model Features (Left) + Location on Master Plan with Casa Club Reference (Right)
     const matchKey = lot.prototipo ? Object.keys(MODEL_FEATURES_TEXT).find(k => k.toUpperCase() === lot.prototipo!.toUpperCase()) : null;
+    const midBoxY = y + 5;
+    const midBoxH = 71;
+
+    // Left Column: Características del Modelo
+    doc.setFontSize(9.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 41, 59);
+    doc.text(`Características del Modelo ${matchKey || toTitle(lot.prototipo)}`, 15, y + 3);
+
+    doc.setDrawColor(226, 232, 240);
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(15, midBoxY, 74, midBoxH, 2.5, 2.5, 'FD');
+
     if (matchKey) {
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(30, 41, 59);
-      doc.text(`Características del Modelo ${matchKey}`, 15, y);
-      y += 5;
+      const features = MODEL_FEATURES_TEXT[matchKey];
       doc.setFontSize(7.5);
       doc.setFont('helvetica', 'normal');
-      doc.setTextColor(71, 85, 105);
-      const features = MODEL_FEATURES_TEXT[matchKey];
       features.forEach((feat, i) => {
-        const cx = i % 2 === 0 ? 15 : w / 2;
-        doc.circle(cx + 2, y - 1, 0.8, 'F');
-        doc.text(feat, cx + 5, y);
-        if (i % 2 !== 0) y += 5;
+        const fy = midBoxY + 6.5 + i * 5;
+        doc.setFillColor(79, 70, 229);
+        doc.circle(20, fy - 1, 0.75, 'F');
+        doc.setTextColor(51, 65, 85);
+        doc.text(feat, 23.5, fy);
       });
-      if (features.length % 2 !== 0) y += 5;
     }
-    
-    y += 3;
+
+    // Orientation reference callout at bottom of left card
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.2);
+    doc.line(19, midBoxY + 58, 85, midBoxY + 58);
+    doc.setFontSize(5.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(5, 150, 105);
+    doc.text('ORIENTACIÓN RESPECTO A CASA CLUB', 19, midBoxY + 62.5);
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 41, 59);
+    doc.text(`${getClubReferenceText(lot)} (Etapa ${lot.etapa})`, 19, midBoxY + 67);
+
+    // Right Column: Ubicación en el Plano (con Casa Club como referencia)
+    const mapCardX = 93;
+    const mapCardW = 102;
+    doc.setFontSize(9.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 41, 59);
+    doc.text('Ubicación de la Casa en el Plano', mapCardX, y + 3);
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(5, 150, 105);
+    doc.text('Ref: Casa Club', mapCardX + mapCardW, y + 3, { align: 'right' });
+
+    doc.setDrawColor(226, 232, 240);
+    doc.setFillColor(248, 250, 252);
+    doc.setLineWidth(0.25);
+    doc.roundedRect(mapCardX, midBoxY, mapCardW, midBoxH, 2.5, 2.5, 'FD');
+
+    // Inner Plan Canvas
+    const planBoxX = mapCardX + 2.5;
+    const planBoxY = midBoxY + 2.5;
+    const planBoxW = 63.5;
+    const planBoxH = midBoxH - 5;
+    doc.setDrawColor(226, 232, 240);
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(planBoxX, planBoxY, planBoxW, planBoxH, 2, 2, 'FD');
+
+    const stage = lot.etapa;
+    const svgMinX = stage === 1 ? 90 : 370;
+    const svgW = 440;
+    const svgMinY = 66;
+    const svgH = 486;
+    const pad = 2.6;
+    const scale = Math.min((planBoxW - pad * 2) / svgW, (planBoxH - pad * 2) / svgH);
+    const originX = planBoxX + (planBoxW - svgW * scale) / 2;
+    const originY = planBoxY + (planBoxH - svgH * scale) / 2;
+    const tx = (sx: number) => originX + (sx - svgMinX) * scale;
+    const ty = (sy: number) => originY + (sy - svgMinY) * scale;
+    const ts = (sv: number) => sv * scale;
+
+    const stageRects = getStageLotRects(stage);
+    const selRect = stageRects.find(r => r.lotId === lot.id);
+
+    // Stage title inside plan
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`PLANO ETAPA ${stage}`, tx(stage === 1 ? 260 : 620), ty(74), { align: 'center' });
+
+    // Internal circulation dotted line
+    const streetX = tx(stage === 1 ? 110 : 790);
+    doc.setFillColor(226, 232, 240);
+    for (let sy = 88; sy <= 530; sy += 18) {
+      doc.circle(streetX, ty(sy), 0.35, 'F');
+    }
+
+    // Dashed orientation line from Casa Club center to Selected Lot center (drawn underneath boxes)
+    const ccX = tx(380);
+    const ccY = ty(230);
+    const ccW = ts(140);
+    const ccH = ts(100);
+    if (selRect) {
+      doc.setDrawColor(99, 102, 241);
+      doc.setLineWidth(0.35);
+      (doc as any).setLineDashPattern([1, 1], 0);
+      doc.line(
+        ccX + ccW / 2,
+        ccY + ccH / 2,
+        tx(selRect.x + selRect.w / 2),
+        ty(selRect.y + selRect.h / 2)
+      );
+      (doc as any).setLineDashPattern([], 0);
+    }
+
+    // Draw Casa Club Reference Landmark
+    doc.setFillColor(236, 253, 245);
+    doc.setDrawColor(16, 185, 129);
+    doc.setLineWidth(0.45);
+    doc.roundedRect(ccX, ccY, ccW, ccH, 1.8, 1.8, 'FD');
+
+    doc.setDrawColor(110, 231, 183);
+    doc.setLineWidth(0.25);
+    (doc as any).setLineDashPattern([0.8, 0.8], 0);
+    doc.roundedRect(ccX + 1.1, ccY + 1.1, ccW - 2.2, ccH - 2.2, 1.2, 1.2, 'S');
+    (doc as any).setLineDashPattern([], 0);
+
+    // Tree icon inside Casa Club
+    const treeCx = ccX + ccW / 2;
+    const treeTopY = ccY + 2.1;
+    doc.setFillColor(16, 185, 129);
+    doc.triangle(treeCx, treeTopY, treeCx - 1.5, treeTopY + 2.1, treeCx + 1.5, treeTopY + 2.1, 'F');
+    doc.triangle(treeCx, treeTopY + 1.1, treeCx - 1.9, treeTopY + 3.4, treeCx + 1.9, treeTopY + 3.4, 'F');
+    doc.setDrawColor(5, 150, 105);
+    doc.setLineWidth(0.35);
+    doc.line(treeCx, treeTopY + 3.4, treeCx, treeTopY + 4.3);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(5.8);
+    doc.setTextColor(6, 95, 70);
+    doc.text('CASA CLUB', treeCx, ccY + 8.3, { align: 'center' });
+    doc.setFontSize(4.2);
+    doc.setTextColor(5, 150, 105);
+    doc.text('REFERENCIA', treeCx, ccY + 10.6, { align: 'center' });
+
+    // Draw all lots of the stage
+    stageRects.forEach(r => {
+      const lotObj = allAvailable.find(a => a.id === r.lotId);
+      const isSelected = r.lotId === lot.id;
+      const isAvail = lotObj?.estado === 'disponible';
+      const isApart = lotObj?.estado === 'apartada';
+
+      if (isSelected) {
+        doc.setFillColor(49, 46, 129);
+      } else if (isAvail) {
+        doc.setFillColor(167, 243, 208);
+      } else if (isApart) {
+        doc.setFillColor(253, 230, 138);
+      } else {
+        doc.setFillColor(226, 232, 240);
+      }
+
+      doc.setDrawColor(255, 255, 255);
+      doc.setLineWidth(0.25);
+      doc.roundedRect(tx(r.x), ty(r.y), ts(r.w), ts(r.h), 0.6, 0.6, 'FD');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(isSelected ? 5.2 : 4.6);
+      if (isSelected) {
+        doc.setTextColor(255, 255, 255);
+      } else if (isAvail) {
+        doc.setTextColor(6, 78, 59);
+      } else if (isApart) {
+        doc.setTextColor(120, 53, 15);
+      } else {
+        doc.setTextColor(100, 116, 139);
+      }
+      doc.text(r.loteNum, tx(r.x + r.w / 2), ty(r.y + r.h / 2) + 0.75, { align: 'center' });
+    });
+
+    // Outer highlight ring on the quoted lot so it stands out immediately
+    if (selRect) {
+      doc.setDrawColor(79, 70, 229);
+      doc.setLineWidth(0.6);
+      doc.roundedRect(
+        tx(selRect.x) - 0.7,
+        ty(selRect.y) - 0.7,
+        ts(selRect.w) + 1.4,
+        ts(selRect.h) + 1.4,
+        1.1,
+        1.1,
+        'S'
+      );
+    }
+
+    // Right Legend & Reference Panel inside Map Card
+    const legX = planBoxX + planBoxW + 2.5;
+    const legW = mapCardX + mapCardW - legX - 2.5;
+
+    // North indicator
+    const northCx = legX + legW - 4;
+    const northCy = planBoxY + 3.5;
+    doc.setDrawColor(203, 213, 225);
+    doc.setFillColor(255, 255, 255);
+    doc.setLineWidth(0.25);
+    doc.circle(northCx, northCy, 2.8, 'FD');
+    doc.setFillColor(30, 41, 59);
+    doc.triangle(northCx, northCy - 1.9, northCx - 0.9, northCy + 0.5, northCx + 0.9, northCy + 0.5, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(4.5);
+    doc.setTextColor(71, 85, 105);
+    doc.text('N', northCx, northCy + 2.1, { align: 'center' });
+    doc.setFontSize(5);
+    doc.setTextColor(100, 116, 139);
+    doc.text('UBICACIÓN', legX, planBoxY + 4);
+
+    // Quoted House Badge
+    const ubBoxY = planBoxY + 7.5;
+    doc.setFillColor(238, 242, 255);
+    doc.setDrawColor(199, 210, 254);
+    doc.setLineWidth(0.25);
+    doc.roundedRect(legX, ubBoxY, legW, 14.5, 1.5, 1.5, 'FD');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(4.8);
+    doc.setTextColor(79, 70, 229);
+    doc.text('CASA COTIZADA', legX + 2.2, ubBoxY + 3.8);
+    doc.setFontSize(8.5);
+    doc.setTextColor(49, 46, 129);
+    doc.text(`Lote ${lot.lote}`, legX + 2.2, ubBoxY + 8.8);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(5.8);
+    doc.setTextColor(67, 56, 202);
+    doc.text(`Modelo ${toTitle(lot.prototipo)}`, legX + 2.2, ubBoxY + 12.6);
+
+    // Casa Club Reference Badge
+    const refBoxY = ubBoxY + 16.5;
+    doc.setFillColor(236, 253, 245);
+    doc.setDrawColor(167, 243, 208);
+    doc.roundedRect(legX, refBoxY, legW, 15.5, 1.5, 1.5, 'FD');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(4.8);
+    doc.setTextColor(5, 150, 105);
+    doc.text('REF. CASA CLUB', legX + 2.2, refBoxY + 3.8);
+    doc.setFontSize(5.8);
+    doc.setTextColor(6, 95, 70);
+    const refLines = doc.splitTextToSize(getClubReferenceText(lot), legW - 4.4);
+    doc.text(refLines.slice(0, 2), legX + 2.2, refBoxY + 8.2);
+
+    // Color Legend
+    let ly = refBoxY + 19.5;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(5);
+    doc.setTextColor(100, 116, 139);
+    doc.text('SIMBOLOGÍA', legX, ly);
+    ly += 3.2;
+
+    const legendItems: { label: string; fill: [number, number, number]; stroke?: [number, number, number] }[] = [
+      { label: `Lote ${lot.lote} (Tu casa)`, fill: [49, 46, 129] },
+      { label: 'Casa Club (Ref.)', fill: [236, 253, 245], stroke: [16, 185, 129] },
+      { label: 'Disponible', fill: [167, 243, 208] },
+      { label: 'Apartada', fill: [253, 230, 138] },
+      { label: 'Vendida', fill: [226, 232, 240] },
+    ];
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(5.5);
+    legendItems.forEach(item => {
+      doc.setFillColor(item.fill[0], item.fill[1], item.fill[2]);
+      if (item.stroke) {
+        doc.setDrawColor(item.stroke[0], item.stroke[1], item.stroke[2]);
+        doc.setLineWidth(0.3);
+        doc.roundedRect(legX, ly - 2.1, 2.6, 2.6, 0.5, 0.5, 'FD');
+      } else {
+        doc.roundedRect(legX, ly - 2.1, 2.6, 2.6, 0.5, 0.5, 'F');
+      }
+      doc.setTextColor(51, 65, 85);
+      doc.text(item.label, legX + 4, ly);
+      ly += 3.7;
+    });
+
+    y = midBoxY + midBoxH + 4.5;
 
     // 1. Políticas Oficiales de Descuentos (Official Policy Table)
     doc.setFontSize(9.5);
