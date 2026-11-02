@@ -1405,12 +1405,12 @@ const App = () => {
     doc.text('Opciones de Enganche (Esquema Tradicional)', 15, y);
     y += 5;
     
-    const dpColX = [18, 44, 92, 152];
+    const dpColX = [18, 45, 92, 152];
     doc.setFillColor(15, 23, 42);
     doc.rect(15, y, w - 30, 6.5, 'F');
     doc.setFontSize(7);
     doc.setTextColor(255, 255, 255);
-    ['Enganche', 'Enganche Total', 'Restante a Contrato (−$100k apartado)', 'Monto a Financiar'].forEach((h, i) => doc.text(h, dpColX[i], y + 4.5));
+    ['Enganche', 'Enganche Total', 'Restante a Contrato (-$100,000)', 'Monto a Financiar'].forEach((h, i) => doc.text(h, dpColX[i], y + 4.5));
     y += 6.5;
     
     const dpData = [
